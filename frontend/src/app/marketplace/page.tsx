@@ -3,17 +3,20 @@
 import { useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI } from "@/lib/contracts";
-import { WalletConnect } from "@/components/WalletConnect";
 import { formatEther, parseEther } from "viem";
 import Link from "next/link";
+import { DashboardLayout } from "@/components/shared/DashboardLayout";
+import { GlassCard } from "@/components/shared/GlassCard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { MapPin, Tag, ShoppingCart, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function Marketplace() {
   const { address } = useAccount();
-  const [locationId, setLocationId] = useState(""); // Filter by location (optional)
   const [offerPrice, setOfferPrice] = useState("");
   const [selectedSaleId, setSelectedSaleId] = useState<bigint | null>(null);
 
-  // Fetch all sales
   const { data: allSales, isLoading, refetch } = useReadContract({
     address: TRANSFER_OWNERSHIP_ADDRESS,
     abi: TRANSFER_OWNERSHIP_ABI,
@@ -24,14 +27,6 @@ export default function Marketplace() {
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
     hash,
   });
-
-  // Filter sales on client side if locationId is provided (ignoring for now as property details structure in getAllSales might not strictly include locationId unless we fetch it separately, but checking `getSalesByLocation` returns `Sales` struct which has `propertyId`, but `Sales` struct in contract DOES NOT have `locationId`. Wait.
-  // The `Sales` struct has `propertyId`. 
-  // `getAllSales` returns `Sales[]`. 
-  // We can't filter by `locationId` purely from `Sales` struct unless we fetch property details too.
-  // However, the `getSalesByLocation` function in contract did the filtering.
-  // The user just wants to SEE the land. So showing ALL sales is the best fix.
-  // I will just display all sales.
 
   const sales = allSales;
 
@@ -52,120 +47,168 @@ export default function Marketplace() {
     }
   };
 
+  const gradients = [
+    "from-orange-500/20 to-red-500/20",
+    "from-blue-500/20 to-purple-500/20",
+    "from-green-500/20 to-teal-500/20",
+    "from-pink-500/20 to-rose-500/20",
+    "from-amber-500/20 to-yellow-500/20",
+    "from-cyan-500/20 to-blue-500/20",
+  ];
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 },
+  };
+
   return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        <header className="flex justify-between items-center border-b pb-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Marketplace</h1>
-            <p className="text-muted-foreground mt-2">
-              Browse and Buy Properties
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-             <div className="flex gap-4 text-sm mr-4">
-                 <Link href="/marketplace/my-sales" className="hover:underline">My Sales</Link>
-                 <Link href="/marketplace/requested" className="hover:underline">My Requests</Link>
-             </div>
-             <WalletConnect />
-          </div>
-        </header>
-
-        {/* Removed Location ID Search - Showing All Properties By Default */}
-        <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">All Active Listings</h2>
-            <button onClick={() => refetch()} className="text-sm border px-3 py-2 rounded-md hover:bg-accent">
-                Refresh Listings
-            </button>
-        </div>
-
-        <main>
-          {isLoading ? (
-             <div className="text-center py-10">Loading properties...</div>
-          ) : !sales || (sales as any[]).length === 0 ? (
-            <div className="text-center py-20 border rounded-lg bg-card">
-                <h3 className="text-lg font-medium">No Properties Found</h3>
-                <p className="text-muted-foreground">No properties listed for sale in this location.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {(sales as any[]).map((sale: any) => (
-                <div key={sale.saleId.toString()} className="border rounded-lg p-6 bg-card shadow-sm hover:shadow-md transition relative overflow-hidden">
-                   {sale.owner === address && (
-                       <div className="absolute top-0 right-0 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-bl-lg">Your Listing</div>
-                   )}
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className="font-semibold text-lg">Sale #{sale.saleId.toString()}</h3>
-                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                       Price: {formatEther(sale.price)} ETH
-                    </span>
-                  </div>
-                  
-                  <div className="space-y-2 text-sm text-gray-600 mb-6">
-                    <div className="flex justify-between">
-                      <span>Property ID:</span>
-                      <span className="font-mono">{sale.propertyId.toString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Owner:</span>
-                      <span className="font-mono text-xs">{sale.owner.slice(0,6)}...{sale.owner.slice(-4)}</span>
-                    </div>
-                  </div>
-
-                  {sale.owner !== address && sale.state === 0 && ( // Active state check
-                      <div className="mt-4 pt-4 border-t">
-                        {selectedSaleId === sale.saleId ? (
-                             <div className="space-y-2 animate-in fade-in zoom-in duration-300">
-                                 <input
-                                    type="number"
-                                    step="0.0001" 
-                                    placeholder="Offer Price (ETH)"
-                                    className="w-full p-2 text-sm border rounded-md"
-                                    value={offerPrice}
-                                    onChange={(e) => setOfferPrice(e.target.value)}
-                                    autoFocus
-                                 />
-                                 <div className="flex gap-2">
-                                     <button 
-                                        onClick={() => handleRequestPurchase(sale.saleId)}
-                                        className="flex-1 bg-green-600 text-white text-sm px-3 py-2 rounded-md hover:bg-green-700"
-                                        disabled={isConfirming}
-                                     >
-                                        {isConfirming ? "Sending..." : "Confirm Request"}
-                                     </button>
-                                     <button 
-                                        onClick={() => setSelectedSaleId(null)}
-                                        className="bg-gray-200 text-gray-800 text-sm px-3 py-2 rounded-md hover:bg-gray-300"
-                                     >
-                                        Cancel
-                                     </button>
-                                 </div>
-                             </div>
-                        ) : (
-                             <button 
-                                onClick={() => {
-                                    setSelectedSaleId(sale.saleId);
-                                    setOfferPrice(formatEther(sale.price)); // Default to asking price
-                                }}
-                                className="w-full bg-primary text-primary-foreground text-sm px-3 py-2 rounded-md hover:bg-primary/90"
-                             >
-                                Request to Buy
-                             </button>
-                        )}
-                      </div>
-                  )}
-                  
-                  {isConfirmed && selectedSaleId === sale.saleId && (
-                      <div className="mt-2 text-xs text-green-600 text-center font-medium">
-                          Request Sent Successfully!
-                      </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </main>
+    <DashboardLayout>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-foreground mb-2">
+          Land <span className="text-gradient">Marketplace</span>
+        </h1>
+        <p className="text-muted-foreground">Browse verified properties listed for sale</p>
       </div>
-    </div>
+
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+        <div>
+           {/* Placeholder for future filtering details */}
+            <p className="text-sm text-muted-foreground">
+                Showing {sales ? (sales as any[]).length : 0} active listings
+            </p>
+        </div>
+        <Button variant="ghost-glow" onClick={() => refetch()} size="sm">
+            Refresh Listings
+        </Button>
+      </div>
+
+      {isLoading ? (
+         <div className="text-center py-20 text-muted-foreground animate-pulse">Loading properties...</div>
+      ) : !sales || (sales as any[]).length === 0 ? (
+        <GlassCard className="text-center py-20">
+            <h3 className="text-lg font-medium text-foreground">No Properties Found</h3>
+            <p className="text-muted-foreground">No properties listed for sale at the moment.</p>
+        </GlassCard>
+      ) : (
+        <motion.div 
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+        >
+          {(sales as any[]).map((sale: any, index: number) => (
+            <motion.div key={sale.saleId.toString()} variants={itemVariants}>
+                <GlassCard hover className="group relative overflow-hidden">
+                    {/* Visual Header */}
+                    <div className={`aspect-video rounded-xl bg-gradient-to-br ${gradients[index % gradients.length]} mb-4 relative overflow-hidden`}>
+                        <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+                        
+                        {/* Tags */}
+                        <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
+                            <span className="px-3 py-1 rounded-full bg-black/40 backdrop-blur-md text-white text-sm font-bold border border-white/10">
+                                {formatEther(sale.price)} ETH
+                            </span>
+                            {sale.owner === address && (
+                                <span className="px-2 py-1 rounded-full bg-yellow-500/80 text-black text-xs font-bold shadow-lg">
+                                    Your Listing
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="absolute bottom-3 left-3 right-3">
+                            <div className="flex items-center gap-2 text-foreground">
+                                <MapPin className="w-4 h-4" />
+                                <span className="text-sm font-mono tracking-tighter">Sale #{sale.saleId.toString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                
+                   <div className="space-y-4">
+                        <div>
+                            <div className="flex items-center justify-between">
+                                <p className="text-sm text-muted-foreground">Property ID</p>
+                                <p className="text-foreground font-mono">{sale.propertyId.toString()}</p>
+                            </div>
+                            <div className="flex items-center justify-between mt-1">
+                                <p className="text-sm text-muted-foreground">Seller</p>
+                                <p className="text-xs text-muted-foreground font-mono bg-secondary/50 px-2 py-1 rounded">
+                                    {sale.owner.slice(0,6)}...{sale.owner.slice(-4)}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        {sale.owner !== address && sale.state === 0 && (
+                            <div className="pt-4 border-t border-border/50">
+                                {selectedSaleId === sale.saleId ? (
+                                    <div className="space-y-2 animate-in fade-in zoom-in duration-300">
+                                        <Input
+                                            type="number"
+                                            step="0.0001"
+                                            placeholder="Offer Price (ETH)"
+                                            className="bg-secondary/50 border-input"
+                                            value={offerPrice}
+                                            onChange={(e) => setOfferPrice(e.target.value)}
+                                            autoFocus
+                                        />
+                                        <div className="flex gap-2">
+                                            <Button 
+                                                onClick={() => handleRequestPurchase(sale.saleId)}
+                                                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                                disabled={isConfirming}
+                                                size="sm"
+                                            >
+                                                {isConfirming ? <Loader2 className="w-4 h-4 animate-spin"/> : "Confirm"}
+                                            </Button>
+                                            <Button 
+                                                onClick={() => setSelectedSaleId(null)}
+                                                variant="secondary"
+                                                size="sm"
+                                            >
+                                                Cancel
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <Button 
+                                        onClick={() => {
+                                            setSelectedSaleId(sale.saleId);
+                                            setOfferPrice(formatEther(sale.price));
+                                        }}
+                                        variant="hero"
+                                        className="w-full"
+                                    >
+                                        <ShoppingCart className="w-4 h-4 mr-2" />
+                                        Request to Buy
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+
+                        {isConfirmed && selectedSaleId === sale.saleId && (
+                            <div className="mt-3 p-2 rounded bg-green-500/20 text-green-400 text-xs text-center border border-green-500/30">
+                                Request Sent Successfully!
+                            </div>
+                        )}
+                   </div>
+                </GlassCard>
+            </motion.div>
+          ))}
+        </motion.div>
+      )}
+      
+      {writeError && (
+          <div className="fixed bottom-8 right-8 p-4 bg-destructive text-destructive-foreground rounded-lg shadow-lg max-w-sm z-50 animate-in slide-in-from-bottom">
+              <h4 className="font-bold mb-1">Error</h4>
+              <p className="text-sm">{writeError.message.split('\n')[0].slice(0, 100)}...</p>
+          </div>
+      )}
+
+    </DashboardLayout>
   );
 }

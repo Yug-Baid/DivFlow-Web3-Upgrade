@@ -1,14 +1,7 @@
 import { Address } from "viem";
 
-export const LAND_REGISTRY_ADDRESS = "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318"; // Updated
+export const LAND_REGISTRY_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 export const PROPERTIES_ADDRESS = "0x0000000000000000000000000000000000000000"; // Managed by LandRegistry
-
-// ... (ABI definitions are in between, skipping them for brevity in this replacement block if possible, but replace_file_content works on line ranges. I need to be careful with line numbers.
-// The file content has LAND_REGISTRY_ADDRESS at line 3.
-// USERS and TRANSFER_OWNERSHIP are at lines 110-111 (in previous view, approx).
-// Let's do two separate edits or one if they are close. They are far apart (line 3 vs line 110).
-// I will do two REPLACE calls or one MultiReplace. MultiReplace is better.
-
 
 export const LAND_REGISTRY_ABI = [
   {
@@ -116,8 +109,8 @@ export const LAND_REGISTRY_ABI = [
   },
 ] as const;
 
-export const USERS_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6"; // Updated
-export const TRANSFER_OWNERSHIP_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"; // Updated
+export const USERS_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+export const TRANSFER_OWNERSHIP_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
 export const USERS_ABI = [
   {

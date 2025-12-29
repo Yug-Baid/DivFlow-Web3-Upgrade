@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI } from "@/lib/contracts";
+import { parseEther } from "viem";
 
 interface SellPropertyModalProps {
   isOpen: boolean;
@@ -27,8 +28,7 @@ export default function SellPropertyModal({ isOpen, onClose, propertyId }: SellP
         address: TRANSFER_OWNERSHIP_ADDRESS,
         abi: TRANSFER_OWNERSHIP_ABI,
         functionName: "addPropertyOnSale",
-        args: [propertyId, BigInt(price)], // Price in Ether (will be converted in contract?) 
-        // Note: The contract says "_price = convertToWei(_price)". So we send Ether value.
+        args: [propertyId, parseEther(price)], 
       });
     } catch (error) {
       console.error("Listing failed:", error);

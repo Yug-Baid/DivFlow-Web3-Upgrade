@@ -9,7 +9,6 @@ export const metadata: Metadata = {
   description: "Secure, Transparent, and Efficient Land Registration on Blockchain",
 };
 
-import { Navbar } from "@/components/Navbar";
 import { Providers } from "./providers";
 import NoSSR from "@/components/NoSSR";
 
@@ -23,7 +22,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <NoSSR>
-             <Navbar />
+             {/* Navbar removed as it is handled per-page (Landing vs Dashboard) */}
           </NoSSR>
           {children}
         </Providers>
