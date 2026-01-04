@@ -106,11 +106,19 @@ contract TransferOwnerShip {
         return etherValue * 1 ether;
     }
 
-    // add Property on Sale
+    // add Property on Sale - FIX: Now goes to SalePending, not directly to OnSale
     function addPropertyOnSale(uint256 _propertyId, uint256 _price) public {
         require(
             msg.sender == propertiesContract.getLandDetailsAsStruct(_propertyId).owner,
             "Only the owner can put the property on sale."
+        );
+
+        // SECURITY: Check if the property is verified before allowing sale request
+        Property.StateOfProperty currentState = propertiesContract.getLandDetailsAsStruct(_propertyId).state;
+        require(
+            currentState == Property.StateOfProperty.Verified || 
+            currentState == Property.StateOfProperty.Bought,
+            "Property must be Verified or previously Bought before listing for sale"
         );
 
         // add property id to list of properties that are available to sold on a loaction
@@ -138,7 +146,8 @@ contract TransferOwnerShip {
         // add sale to the owner's sales array
         salesOfOwner[msg.sender].push(newSale.saleId);
 
-        propertiesContract.changeStateToOnSale(_propertyId, msg.sender);
+        // FIX: Change to SalePending - Revenue Employee must approve before marketplace
+        propertiesContract.changeStateToSalePending(_propertyId, _price, msg.sender);
 
         emit PropertyOnSale(msg.sender, _propertyId, newSale.saleId);
     }
@@ -213,27 +222,25 @@ contract TransferOwnerShip {
         // Make sure the buyer has made a request and the price is greater than or equal to the owner's set price
         require(requestedUsers[sale.saleId].length > 0, "No buyer requests found");
 
-        // checking buyer has sent request or not
+        // CRITICAL FIX: Find buyer entry that matches BOTH address AND price
+        // This allows accepting any specific offer from a buyer who made multiple bids
         bool buyerFound = false;
         uint256 i = 0;
         for (i = 0; i < requestedUsers[sale.saleId].length; i++) {
-            if (requestedUsers[sale.saleId][i].user == _buyer) {
+            // Match BOTH buyer address AND exact price
+            if (requestedUsers[sale.saleId][i].user == _buyer && 
+                requestedUsers[sale.saleId][i].priceOffered == _price) {
                 buyerFound = true;
                 break;
             }
         }
-        require(buyerFound, "Buyer not found in requested user array");
-
-        require(
-            _price == requestedUsers[sale.saleId][i].priceOffered,
-            "Price sent by seller not equal to price offered by buyer"
-        );
+        require(buyerFound, "No matching request found for this buyer and price");
 
         // Update the sale object with buyer information
         sale.acceptedFor = _buyer;
         sale.acceptedPrice = _price;
         sale.acceptedTime = block.timestamp;
-        sale.deadlineForPayment = block.timestamp + 5 minutes;
+        sale.deadlineForPayment = block.timestamp + 1 hours; // Extended for demo - 1 hour instead of 5 minutes
 
         sale.state = SaleState.AcceptedToABuyer;
 
@@ -305,12 +312,13 @@ contract TransferOwnerShip {
 
         require(block.timestamp <= sale.deadlineForPayment, "Payment deadline has passed");
 
-        // Gettin index value of buyer in
-        // requestedUsers of a sale to purchase.
+        // Find buyer entry matching BOTH address AND accepted price
+        // This is needed when buyer has multiple bids on the same sale
         bool buyerFound = false;
         uint256 i = 0;
         for (i = 0; i < requestedUsers[sale.saleId].length; i++) {
-            if (requestedUsers[sale.saleId][i].user == msg.sender) {
+            if (requestedUsers[sale.saleId][i].user == msg.sender &&
+                requestedUsers[sale.saleId][i].priceOffered == sale.acceptedPrice) {
                 buyerFound = true;
                 break;
             }
