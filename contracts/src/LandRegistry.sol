@@ -90,6 +90,12 @@ contract LandRegistry {
 
     // Assign Land Inspector to a location/region
     function assignLandInspector(uint256 locationId, address inspector) public onlyOwner {
+        // BUG-12 FIX: Prevent duplicate assignment - same wallet cannot be inspector for multiple locations
+        require(
+            inspectorToLocationId[inspector] == 0 || inspectorToLocationId[inspector] == locationId,
+            "Inspector already assigned to another location"
+        );
+        
         // Remove old inspector's reverse mapping if exists
         address oldInspector = landInspectorByLocation[locationId];
         if (oldInspector != address(0)) {
@@ -104,6 +110,12 @@ contract LandRegistry {
 
     // Assign Revenue Employee to a department
     function mapRevenueDeptIdToEmployee(uint256 revenueDeptId, address employeeAddress) public onlyOwner {
+        // BUG-12 FIX: Prevent duplicate assignment - same wallet cannot be employee for multiple departments
+        require(
+            employeeToRevenueDeptId[employeeAddress] == 0 || employeeToRevenueDeptId[employeeAddress] == revenueDeptId,
+            "Employee already assigned to another department"
+        );
+        
         // Remove old employee's reverse mapping if exists
         address oldEmployee = revenueDeptIdToEmployee[revenueDeptId];
         if (oldEmployee != address(0)) {

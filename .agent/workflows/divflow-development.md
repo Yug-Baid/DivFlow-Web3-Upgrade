@@ -141,19 +141,23 @@ DivFlow-Web3-Upgrade/
 - [ ] 2.3 Run seeder with realistic Indian property data
 - [ ] 2.4 Verify data appears correctly in frontend
 
-### Phase 3: Frontend Polish (4 days)
+### Phase 3: Frontend Polish (5 days)
 - [ ] 3.1 Fix React hydration errors
 - [ ] 3.2 Add proper loading states/skeletons
-- [ ] 3.3 Role-based navbar (hide admin/revenue links for non-privileged users)
+- [x] 3.3 Role-based navbar (DONE - DashboardLayout.tsx)
 - [ ] 3.4 Add toast notifications for all contract interactions
 - [ ] 3.5 Fix "Total Value" stat (shows wallet balance, should show property value sum)
+- [ ] 3.6 **INR Price Display** - Show property prices in ₹ (store in Wei, convert using live ETH/INR rate or fixed demo rate)
 
-### Phase 4: Marketplace Features (4 days)
-- [ ] 4.1 Fix property state after sale completion
-- [ ] 4.2 Prevent duplicate purchase requests
+### Phase 4: Marketplace Features (8 days)
+- [x] 4.1 Fix property state after sale completion (DONE)
+- [x] 4.2 Prevent duplicate purchase requests (DONE)
 - [ ] 4.3 Fix "Reject" button (currently does nothing)
-- [ ] 4.4 Implement proper buyer request flow
+- [x] 4.4 Implement proper buyer request flow (DONE)
 - [ ] 4.5 Add transaction history page
+- [ ] 4.6 **Google Maps Integration** - Show property locations on interactive map (Leaflet or Google Maps API)
+- [ ] 4.7 **Chat System (XMTP)** - Wallet-to-wallet messaging between buyer and seller
+- [ ] 4.8 **Fiat Off-Ramp (Mock)** - Mock bank withdrawal UI; show INR amount, bank details form, success message (Production: OnMeta/Transak API)
 
 ### Phase 5: Verification Flow (3 days)
 - [ ] 5.1 Revenue employee scheduling
@@ -166,6 +170,29 @@ DivFlow-Web3-Upgrade/
 - [ ] 6.2 Create user documentation
 - [ ] 6.3 Hackathon demo script
 - [ ] 6.4 Record demo video
+
+### Phase 7: Production Deployment (RESEARCHED 2026-01-05)
+See `deployment-guide.md` for full details.
+
+**Summary of Research:**
+| Component | Recommendation |
+|-----------|----------------|
+| Frontend hosting | Vercel (zero-config for Next.js, free tier) |
+| Smart contract testnet | Sepolia (free ETH, mimics Ethereum mainnet) |
+| Smart contract mainnet | Polygon (low gas fees, faster transactions) |
+| CI/CD | GitHub Actions → Vercel auto-deploy |
+| DDoS/CDN | Cloudflare (free tier with WAF) |
+| Rate limiting | Upstash Redis + Next.js middleware |
+| Kubernetes | ❌ Not needed for hackathon (overkill) |
+
+**Pre-Deployment Checklist:**
+- [ ] 7.1 Get Alchemy/Infura API key for Sepolia
+- [ ] 7.2 Get test ETH from faucet
+- [ ] 7.3 Deploy contracts to Sepolia
+- [ ] 7.4 Update frontend with Sepolia contract addresses
+- [ ] 7.5 Deploy frontend to Vercel
+- [ ] 7.6 Add Cloudflare as CDN (optional)
+- [ ] 7.7 Test full flow on production URL
 
 ---
 
@@ -230,22 +257,51 @@ npm run dev
 Copy and paste this to start a fresh chat:
 
 ```
-I'm continuing work on the DivFlow-Web3 decentralized land registry hackathon project.
+# Continue DivFlow-Web3 Development
 
-Please read:
-1. `.agent/workflows/divflow-development.md` - Development status and remaining work
-2. `.agent/workflows/bottleneck_analysis.md` - Full analysis of all bugs and proposed solutions
+## STEP 1: Read ALL workflow files in `.agent/workflows/`:
+Read each file completely before making any changes:
+1. `bottleneck_analysis.md` - Architecture overview, security analysis, industry comparisons
+2. `divflow-development.md` - Development roadmap, completed phases, remaining phases
+3. `divflow-bugs.md` - Bug tracking with root cause analysis (BUG-1 to BUG-9)
+4. `coderabbit-suggestions.md` - Security improvements (documented, NOT YET applied due to breaking changes)
+5. `deployment-guide.md` - Production deployment research (Vercel, CI/CD, Cloudflare, security)
 
-Current status:
-- Phase 1 (Security Fixes) is complete but has 4 bugs to fix:
-  1. Cannot register second land after first (form doesn't reset)
-  2. Error messages not displaying on registration failure
-  3. Admin page accessible without admin wallet check
-  4. Revenue portal needs access control
-
-Priority: Fix these 4 bugs, then continue to Phase 2 (Demo Data Setup)
-
-Project location: C:\Users\Lenovo\Desktop\Udbhav\DivFlow-Web3-Upgrade
-Tech stack: Foundry/Anvil + Next.js 14 + wagmi + viem
-Hackathon deadline: 20 days
+## STEP 2: Commit workflow file updates
+Start by committing the updated workflow documentation:
+```bash
+cd DivFlow-Web3-Upgrade
+git add .agent/workflows/
+git commit -m "docs: Update workflows with bug fixes and deployment research"
+git push origin feature/marketplace-fixes-and-cleanup
 ```
+
+## STEP 3: Fix Priority Bugs
+| Priority | Bug | Description |
+|----------|-----|-------------|
+| 🔴 CRITICAL | BUG-7 | Transfer to address not working |
+| 🔴 HIGH | BUG-8 | Transfer should route through Land Registry Officer |
+| 🟡 MEDIUM | BUG-9 | "Get Started" → "Launch App" for staff wallets |
+
+## Current Status:
+- ✅ Phase 1 (Security Fixes) - COMPLETE
+- ✅ Phase 1.5 (Marketplace Fixes) - COMPLETE  
+- ⏳ Phase 2-6 - IN PROGRESS
+- 📋 Phase 7 (Deployment) - RESEARCHED, ready to implement
+
+## Tech Stack:
+- Next.js 14, Solidity 0.8.20 (Foundry), wagmi v2, viem
+- Local: Anvil chain (31337) on 127.0.0.1:8545
+
+## Start Local Dev:
+```bash
+cd contracts && anvil                    # Terminal 1
+cd contracts && bash setup_and_deploy.sh # Terminal 2
+cd frontend && npm run dev               # Terminal 3
+```
+
+## GitHub:
+https://github.com/Yug-Baid/DivFlow-Web3-Upgrade
+Branch: feature/marketplace-fixes-and-cleanup
+```
+

@@ -6,23 +6,51 @@ import { ArrowRight, Shield, Zap, Globe, Rocket } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAccount, useReadContract } from "wagmi";
-import { USERS_ADDRESS, USERS_ABI } from "@/lib/contracts";
+import { USERS_ADDRESS, USERS_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+
+// Admin wallet address (Anvil account 0)
+const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
 export const HeroSection = () => {
   const { address, isConnected } = useAccount();
 
-  // BUG 4 FIX: Check if user is registered to show different button
+  // Check if user is registered
   const { data: isRegistered } = useReadContract({
     address: USERS_ADDRESS,
     abi: USERS_ABI,
     functionName: "isUserRegistered",
     args: address ? [address] : undefined,
+    query: { enabled: !!address },
   });
 
-  // Determine button text and destination
-  const buttonText = isConnected && isRegistered ? "Launch App" : "Get Started";
-  const buttonHref = isConnected && isRegistered ? "/dashboard" : "/register";
-  const ButtonIcon = isConnected && isRegistered ? Rocket : ArrowRight;
+  // BUG-9 FIX: Check if wallet is assigned as Land Inspector
+  const { data: inspectorLocationId } = useReadContract({
+    address: LAND_REGISTRY_ADDRESS,
+    abi: LAND_REGISTRY_ABI,
+    functionName: "getInspectorLocation",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  // BUG-9 FIX: Check if wallet is assigned as Revenue Employee
+  const { data: employeeRevenueDeptId } = useReadContract({
+    address: LAND_REGISTRY_ADDRESS,
+    abi: LAND_REGISTRY_ABI,
+    functionName: "getEmployeeRevenueDept",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  // Determine if user is staff (Admin, Land Inspector, or Revenue Employee)
+  const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+  const isLandInspector = inspectorLocationId && (inspectorLocationId as bigint) > BigInt(0);
+  const isRevenueEmployee = employeeRevenueDeptId && (employeeRevenueDeptId as bigint) > BigInt(0);
+  const isStaff = isAdmin || isLandInspector || isRevenueEmployee;
+
+  // Determine button text and destination - Staff gets "Launch App" even if not registered
+  const buttonText = isConnected && (isRegistered || isStaff) ? "Launch App" : "Get Started";
+  const buttonHref = isConnected && (isRegistered || isStaff) ? "/dashboard" : "/register";
+  const ButtonIcon = isConnected && (isRegistered || isStaff) ? Rocket : ArrowRight;
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">

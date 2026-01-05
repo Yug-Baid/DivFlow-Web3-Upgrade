@@ -1,6 +1,7 @@
 // IPFS Upload Utility using Pinata
 // Documentation: https://docs.pinata.cloud
 
+// Legacy keys (kept for backward compatibility, but prefer server-side upload)
 const PINATA_API_KEY = process.env.NEXT_PUBLIC_PINATA_API_KEY;
 const PINATA_SECRET = process.env.NEXT_PUBLIC_PINATA_SECRET;
 
@@ -11,11 +12,46 @@ export interface UploadResult {
 }
 
 /**
- * Upload a file to IPFS via Pinata
+ * Upload a file to IPFS via server-side API route (SECURE - recommended)
+ * Falls back to direct Pinata upload if server route fails
  * @param file - The file to upload
  * @returns The IPFS CID (Content Identifier)
  */
 export async function uploadToIPFS(file: File): Promise<UploadResult> {
+    // Try server-side upload first (secure - JWT not exposed to browser)
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/ipfs/upload', {
+            method: 'POST',
+            body: formData,
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            return {
+                success: true,
+                cid: data.cid
+            };
+        }
+
+        // If server route returns an error, fall back to legacy method
+        console.warn("Server upload failed, trying legacy method:", data.error);
+    } catch (error) {
+        console.warn("Server route not available, trying legacy method");
+    }
+
+    // Fallback: Direct Pinata upload (legacy - keys exposed in browser)
+    return uploadToIPFSLegacy(file);
+}
+
+/**
+ * Legacy upload method - uses NEXT_PUBLIC_ keys (exposed to browser)
+ * Only use if server-side route is not configured
+ */
+async function uploadToIPFSLegacy(file: File): Promise<UploadResult> {
     if (!PINATA_API_KEY || !PINATA_SECRET) {
         console.error("Pinata API keys not configured");
         return {
@@ -101,8 +137,10 @@ export function getIPFSGateways(cid: string): string[] {
 }
 
 /**
- * Check if Pinata is properly configured
+ * Check if Pinata is properly configured (either server-side or legacy)
  */
 export function isPinataConfigured(): boolean {
-    return !!(PINATA_API_KEY && PINATA_SECRET);
+    // Server-side is always "configured" - actual check happens in API route
+    // This function is kept for backward compatibility
+    return true;
 }

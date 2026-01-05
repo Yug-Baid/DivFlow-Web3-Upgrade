@@ -99,6 +99,13 @@ contract TransferOwnerShip {
         uint256 deadline
     );
 
+    event OwnershipTransferred(
+        uint256 indexed saleId,
+        uint256 indexed propertyId,
+        address indexed newOwner,
+        uint256 amount
+    );
+
     // ************ FUNCTIONS ************
 
     // Conversion function from Ether to Wei
@@ -151,7 +158,7 @@ contract TransferOwnerShip {
 
         emit PropertyOnSale(msg.sender, _propertyId, newSale.saleId);
     }
-// ...
+
     function getRequestedUsers(uint256 saleId) public view returns (RequestedUser[] memory) {
         return requestedUsers[saleId];
     }
@@ -167,7 +174,7 @@ contract TransferOwnerShip {
         return requests;
     }
 
-    // send purchase request to seller  to buy a land from buyer
+    // send purchase request to seller to buy a land from buyer
     function sendPurchaseRequest(uint256 _saleId, uint256 _priceOffered) public {
         // Get the sales details
         Sales storage sale = sales[_saleId];
@@ -250,7 +257,7 @@ contract TransferOwnerShip {
 
         emit SaleAccepted(_saleId, _buyer, _price, sale.deadlineForPayment);
     }
-// ...
+
     // function to re-request purchase request
     function rerequestPurchaseRequest(uint256 _saleId, uint256 _priceOffered) public {
         // Get the sales details
@@ -302,7 +309,7 @@ contract TransferOwnerShip {
         emit PurchaseRequestSent(_saleId, msg.sender, _priceOffered);
     }
 
-    // function to transfer owner ship
+    // function to transfer ownership - REVERTED: Direct transfer without inspector approval
     function transferOwnerShip(uint256 saleId) public payable {
         Sales storage sale = sales[saleId];
 
@@ -313,7 +320,6 @@ contract TransferOwnerShip {
         require(block.timestamp <= sale.deadlineForPayment, "Payment deadline has passed");
 
         // Find buyer entry matching BOTH address AND accepted price
-        // This is needed when buyer has multiple bids on the same sale
         bool buyerFound = false;
         uint256 i = 0;
         for (i = 0; i < requestedUsers[sale.saleId].length; i++) {
@@ -324,40 +330,34 @@ contract TransferOwnerShip {
             }
         }
 
-        // checking existed buyer or not
         require(buyerFound, "Buyer Not found in Requested List");
 
-        // transfer payment to property owner
+        // DIRECT TRANSFER: Send ETH to seller immediately
         payable(sale.owner).transfer(msg.value);
 
-        // transfer ownership of property to buyer
+        // Transfer ownership of property to buyer
         LandRegistryContract.transferOwnership(sale.propertyId, msg.sender);
 
-        // chaging state of Requested user to successfully transformed
+        // Update buyer state to successfully transferred
         requestedUsers[sale.saleId][i].state = RequestedUserToASaleState.SuccessfullyTransfered;
 
-        // Remove sale from availabel sales by location
+        // Mark payment as done
+        sale.paymentDone = true;
 
-        uint256 _location = propertiesContract
-            .getLandDetailsAsStruct(sale.propertyId)
-            .locationId;
-
-        uint256[] storage propertiesOnSale = propertiesOnSaleByLocation[_location];
-
-        for (i = 0; i < propertiesOnSale.length; i++) {
-            if (propertiesOnSale[i] == sale.saleId) {
-                propertiesOnSale[i] = propertiesOnSale[propertiesOnSale.length - 1];
+        // Remove sale from available sales by location
+        uint256 locationId = propertiesContract.getLandDetailsAsStruct(sale.propertyId).locationId;
+        uint256[] storage propertiesOnSale = propertiesOnSaleByLocation[locationId];
+        for (uint256 j = 0; j < propertiesOnSale.length; j++) {
+            if (propertiesOnSale[j] == saleId) {
+                propertiesOnSale[j] = propertiesOnSale[propertiesOnSale.length - 1];
                 propertiesOnSale.pop();
                 break;
             }
         }
 
+        // Update sale state to Success
         sale.state = SaleState.Success;
 
-        // // remove sale from buyer's requested sales
-        // delete requestedSales[msg.sender][saleId];
-
-        // // emit event
-        // emit SaleCompleted(saleId, msg.sender, sale.acceptedPrice);
+        emit OwnershipTransferred(saleId, sale.propertyId, msg.sender, msg.value);
     }
 }

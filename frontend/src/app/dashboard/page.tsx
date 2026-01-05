@@ -133,6 +133,24 @@ export default function Dashboard() {
     );
   }
 
+  // BUG-10 FIX: Check if wallet is connected FIRST
+  if (!address && isMounted) {
+    return (
+      <DashboardLayout>
+        <GlassCard className="p-8 max-w-md mx-auto text-center">
+          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Wallet Not Connected</h2>
+          <p className="text-muted-foreground mb-4">
+            Please connect your wallet to access the dashboard and manage your properties.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Click the &quot;Connect Wallet&quot; button in the navigation bar.
+          </p>
+        </GlassCard>
+      </DashboardLayout>
+    );
+  }
+
   // Block unregistered users with a message
   if (!isRegistered && address) {
     return (
@@ -273,8 +291,10 @@ export default function Dashboard() {
                         Sell
                       </Button>
                     )}
-                    <Button
-                      variant="outline" // Using default/outline logic but customized
+                    {/* BUG-7 FIX: Transfer button hidden for hackathon - direct address transfer not working
+                       TODO: Implement post-hackathon if needed */}
+                    {/* <Button
+                      variant="outline"
                       className="bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 flex-1"
                       size="sm"
                       onClick={() => {
@@ -283,7 +303,7 @@ export default function Dashboard() {
                       }}
                     >
                       Transfer
-                    </Button>
+                    </Button> */}
                   </div>
                 </GlassCard>
               </motion.div>

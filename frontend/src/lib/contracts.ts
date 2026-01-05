@@ -402,5 +402,6 @@ export const TRANSFER_OWNERSHIP_ABI = [
     outputs: [],
     stateMutability: "payable",
     type: "function",
-  }
+  },
 ] as const;
+
