@@ -21,7 +21,7 @@ contract DebugDashboard is Test {
 
         address owner = address(0x123);
         vm.prank(owner);
-        landRegistry.addLand(locationId, revenueDeptId, surveyNumber, area, ipfsHash);
+        landRegistry.addLand(locationId, revenueDeptId, surveyNumber, area, ipfsHash, 0);
 
         vm.prank(owner);
         Property.Land[] memory properties = landRegistry.getPropertiesOfOwner(owner);

@@ -13,6 +13,7 @@ contract FullFlowTest is Test {
     Users usersContract;
 
     address admin = address(1);
+    address landInspector = address(5);
     address revenueEmployee = address(2);
     address seller = address(3);
     address buyer = address(4);
@@ -23,29 +24,38 @@ contract FullFlowTest is Test {
         landRegistry = new LandRegistry();
         transferOwnership = new TransferOwnerShip(address(landRegistry));
         
-        // Setup Revenue Dept
+        // Setup Land Inspector for location 1
+        landRegistry.assignLandInspector(1, landInspector);
+        
+        // Setup Revenue Dept Employee for dept 100
         landRegistry.mapRevenueDeptIdToEmployee(100, revenueEmployee);
         vm.stopPrank();
     }
 
     function testFullSaleFlow() public {
-        // 1. Register Users
+        // 1. Register Users (using hashed identity for privacy)
         vm.prank(seller);
-        usersContract.registerUser("Seller", "User", "01-01-1990", "123456789012");
-        vm.prank(buyer);
-        usersContract.registerUser("Buyer", "User", "01-01-1995", "987654321098");
-
-        // 2. Register Land (Seller)
-        vm.prank(seller);
-        uint256 propertyId = landRegistry.addLand(1, 100, 50, 1000, "QmHash");
+        bytes32 sellerIdentity = keccak256(abi.encodePacked("Seller", "User", "01-01-1990", "123456789012"));
+        bytes32 sellerAadhar = keccak256(abi.encodePacked("123456789012"));
+        usersContract.registerUser(sellerIdentity, sellerAadhar);
         
-        // 3. Verify Land (Revenue Employee)
-        vm.prank(revenueEmployee);
-        landRegistry.verifyProperty(propertyId);
+        vm.prank(buyer);
+        bytes32 buyerIdentity = keccak256(abi.encodePacked("Buyer", "User", "01-01-1995", "987654321098"));
+        bytes32 buyerAadhar = keccak256(abi.encodePacked("987654321098"));
+        usersContract.registerUser(buyerIdentity, buyerAadhar);
+
+        // 2. Register Land (Seller) - now with landType parameter (0 = WithPapers)
+        vm.prank(seller);
+        uint256 propertyId = landRegistry.addLand(1, 100, 50, 1000, "QmHash", 0);
+        
+        // 3. Land Inspector verifies property registration
+        vm.prank(landInspector);
+        landRegistry.verifyPropertyByInspector(propertyId);
         
         // Check state is Verified (2)
         Property.Land memory land = landRegistry.getPropertyDetails(propertyId);
         assertEq(uint(land.state), 2); // Verified
+        assertEq(land.landType, 0); // WithPapers
 
         // 4. List on Marketplace (Seller)
         vm.prank(seller);
@@ -90,3 +100,4 @@ contract FullFlowTest is Test {
         assertEq(uint(soldLand.state), 5); // Bought
     }
 }
+

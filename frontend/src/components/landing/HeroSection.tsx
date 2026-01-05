@@ -2,29 +2,74 @@
 
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Shield, Zap, Globe } from "lucide-react";
+import { ArrowRight, Shield, Zap, Globe, Rocket } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { useAccount, useReadContract } from "wagmi";
+import { USERS_ADDRESS, USERS_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+
+// Admin wallet address (Anvil account 0)
+const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
 export const HeroSection = () => {
+  const { address, isConnected } = useAccount();
+
+  // Check if user is registered
+  const { data: isRegistered } = useReadContract({
+    address: USERS_ADDRESS,
+    abi: USERS_ABI,
+    functionName: "isUserRegistered",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  // BUG-9 FIX: Check if wallet is assigned as Land Inspector
+  const { data: inspectorLocationId } = useReadContract({
+    address: LAND_REGISTRY_ADDRESS,
+    abi: LAND_REGISTRY_ABI,
+    functionName: "getInspectorLocation",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  // BUG-9 FIX: Check if wallet is assigned as Revenue Employee
+  const { data: employeeRevenueDeptId } = useReadContract({
+    address: LAND_REGISTRY_ADDRESS,
+    abi: LAND_REGISTRY_ABI,
+    functionName: "getEmployeeRevenueDept",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  // Determine if user is staff (Admin, Land Inspector, or Revenue Employee)
+  const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+  const isLandInspector = inspectorLocationId && (inspectorLocationId as bigint) > BigInt(0);
+  const isRevenueEmployee = employeeRevenueDeptId && (employeeRevenueDeptId as bigint) > BigInt(0);
+  const isStaff = isAdmin || isLandInspector || isRevenueEmployee;
+
+  // Determine button text and destination - Staff gets "Launch App" even if not registered
+  const buttonText = isConnected && (isRegistered || isStaff) ? "Launch App" : "Get Started";
+  const buttonHref = isConnected && (isRegistered || isStaff) ? "/dashboard" : "/register";
+  const ButtonIcon = isConnected && (isRegistered || isStaff) ? Rocket : ArrowRight;
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
-      
+
       {/* Background Image with Overlay */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none">
-          <Image 
-            src="/hero-bgg.jpg" 
-            alt="Land Registry Background" 
-            fill 
-            className="opacity-70 mb-30"
-            
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-background via-background/90 to-background/40" />
+        <Image
+          src="/hero-bgg.jpg"
+          alt="Land Registry Background"
+          fill
+          className="opacity-70 mb-30"
+
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-background via-background/90 to-background/40" />
       </div>
 
       {/* Background Effects */}
       <div className="absolute inset-0 bg-hero-glow pointer-events-none opacity-50 mix-blend-overlay" />
-      
+
       {/* Grid Pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--border)/0.3)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border)/0.3)_1px,transparent_1px)] bg-[size:60px_60px] pointer-events-none opacity-20 z-0" />
 
@@ -60,22 +105,22 @@ export const HeroSection = () => {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="text-lg md:text-xl text-muted-foreground/80 max-w-2xl mx-auto mb-10 leading-relaxed drop-shadow-md"
           >
-            Register, verify, and transfer land ownership with immutable blockchain technology. 
+            Register, verify, and transfer land ownership with immutable blockchain technology.
             Transparent, secure, and tamper-proof property records for the digital age.
           </motion.p>
 
-          {/* CTA Buttons */}
+          {/* CTA Buttons - BUG 4 FIX: Dynamic button based on registration status */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.3 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
           >
-            <Link href="/register">
-                <Button variant="hero" size="lg" className="group shadow-glow">
-                Get Started
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
+            <Link href={buttonHref}>
+              <Button variant="hero" size="lg" className="group shadow-glow">
+                {buttonText}
+                <ButtonIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Button>
             </Link>
             <Button variant="ghost-glow" size="lg">
               View Documentation

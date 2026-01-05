@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI } from "@/lib/contracts";
 import { parseEther } from "viem";
@@ -9,29 +9,62 @@ interface SellPropertyModalProps {
   isOpen: boolean;
   onClose: () => void;
   propertyId: bigint;
+  onSuccess?: () => void; // G1 FIX: Callback to refresh parent data
 }
 
-export default function SellPropertyModal({ isOpen, onClose, propertyId }: SellPropertyModalProps) {
-  const { writeContract, data: hash, error: writeError } = useWriteContract();
+export default function SellPropertyModal({ isOpen, onClose, propertyId, onSuccess }: SellPropertyModalProps) {
+  const { writeContract, data: hash, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
     hash,
   });
 
   const [price, setPrice] = useState("");
+  // D2 FIX: Track if form has been submitted to prevent multiple clicks
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+
+  // D1 FIX: Auto-close modal after successful listing
+  useEffect(() => {
+    if (isConfirmed) {
+      // G1 FIX: Call onSuccess callback immediately when confirmed
+      if (onSuccess) {
+        onSuccess();
+      }
+      const timer = setTimeout(() => {
+        setPrice("");
+        setHasSubmitted(false);
+        resetWrite();
+        onClose();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isConfirmed, onClose, resetWrite, onSuccess]);
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setPrice("");
+      setHasSubmitted(false);
+      resetWrite();
+    }
+  }, [isOpen, resetWrite]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!price) return;
+    if (!price || hasSubmitted) return;
+
+    // D2 FIX: Mark as submitted to prevent double-clicks
+    setHasSubmitted(true);
 
     try {
       writeContract({
         address: TRANSFER_OWNERSHIP_ADDRESS,
         abi: TRANSFER_OWNERSHIP_ABI,
         functionName: "addPropertyOnSale",
-        args: [propertyId, parseEther(price)], 
+        args: [propertyId, parseEther(price)],
       });
     } catch (error) {
       console.error("Listing failed:", error);
+      setHasSubmitted(false); // Allow retry on error
     }
   };
 
@@ -56,36 +89,48 @@ export default function SellPropertyModal({ isOpen, onClose, propertyId }: SellP
               className="w-full p-2 rounded-md border bg-background text-foreground"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
+              disabled={hasSubmitted}
             />
           </div>
 
           <div className="flex gap-2 justify-end mt-6">
-             <button
+            <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm border rounded-md hover:bg-accent"
+              disabled={isConfirming}
+              className="px-4 py-2 text-sm border rounded-md hover:bg-accent disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isConfirming || !price}
+              disabled={isConfirming || !price || hasSubmitted || isConfirmed}
               className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
             >
-              {isConfirming ? "Processing..." : "Put on Sale"}
+              {isConfirming ? "Processing..." : isConfirmed ? "Listed!" : "Put on Sale"}
             </button>
           </div>
         </form>
 
         {isConfirmed && (
-             <div className="mt-4 text-green-600 text-center text-sm">
-                Property Listed Successfully!
-                <br/>
-                <button onClick={onClose} className="text-xs underline mt-1">Close</button>
-             </div>
+          <div className="mt-4 text-green-600 text-center text-sm">
+            Property Listed Successfully!
+            <p className="text-xs text-muted-foreground mt-1">Closing automatically...</p>
+          </div>
         )}
-        {writeError && <div className="mt-4 text-red-500 text-xs break-all">Error: {writeError.message}</div>}
+        {writeError && (
+          <div className="mt-4 text-red-500 text-xs break-all">
+            Error: {writeError.message}
+            <button
+              onClick={() => { resetWrite(); setHasSubmitted(false); }}
+              className="block underline mt-1"
+            >
+              Try Again
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+

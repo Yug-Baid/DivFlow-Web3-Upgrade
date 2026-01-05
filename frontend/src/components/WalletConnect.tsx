@@ -22,20 +22,24 @@ export function WalletConnect() {
       <div className="relative">
         <button
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-          className="bg-secondary text-secondary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-secondary/80 transition flex items-center gap-2"
+          className="bg-secondary text-secondary-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-secondary/80 transition flex items-center gap-2 border border-border"
         >
           <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
           {address.slice(0, 6)}...{address.slice(-4)}
         </button>
 
         {isDropdownOpen && (
-          <div className="absolute right-0 mt-2 w-48 bg-card border rounded-md shadow-lg z-50">
+          <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+            <div className="p-3 border-b border-border/50">
+              <p className="text-xs text-muted-foreground">Connected Wallet</p>
+              <p className="text-sm font-mono truncate">{address}</p>
+            </div>
             <div className="p-2">
               <button
                 onClick={() => disconnect()}
-                className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-accent rounded-sm transition"
+                className="w-full text-left px-4 py-2.5 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive rounded-md transition flex items-center gap-2 font-medium"
               >
-                Disconnect
+                Switch Wallet / Disconnect
               </button>
             </div>
           </div>

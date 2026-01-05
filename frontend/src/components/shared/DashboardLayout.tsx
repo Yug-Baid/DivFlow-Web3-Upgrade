@@ -1,9 +1,10 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { useAccount, useReadContract } from "wagmi";
 import {
   MapPin,
   LayoutDashboard,
@@ -15,29 +16,110 @@ import {
   Shield,
   Menu,
   X,
-  LogOut,
+  Search,
+  Eye,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { WalletConnect } from '@/components/WalletConnect';
+import { LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+
+// Known admin address (Anvil deployer account 0)
+const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-const navItems = [
+// CITIZEN Navigation - for regular users (not staff)
+const citizenNavItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Marketplace", href: "/marketplace", icon: Store },
   { label: "My Sales", href: "/marketplace/my-sales", icon: FileText },
   { label: "My Requests", href: "/marketplace/requested", icon: ShoppingBag },
   { label: "Register Land", href: "/register-land", icon: PlusCircle },
-  { label: "Revenue Portal", href: "/revenue", icon: Building2 },
-  { label: "Admin", href: "/admin", icon: Shield },
+  { label: "Track Requests", href: "/track", icon: Eye },
 ];
+
+// STAFF Navigation - role-specific pages only
+const staffNavItems = {
+  admin: [
+    { label: "Admin Panel", href: "/admin", icon: Shield },
+    { label: "Land Inspector View", href: "/inspector", icon: Search },
+    { label: "Revenue View", href: "/revenue", icon: Building2 },
+  ],
+  inspector: [
+    { label: "Inspector Portal", href: "/inspector", icon: Search },
+  ],
+  revenue: [
+    { label: "Revenue Portal", href: "/revenue", icon: Building2 },
+  ],
+};
 
 export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const { address } = useAccount();
+
+  // Fix hydration mismatch by only rendering role-based nav after mount
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Role detection for sidebar navigation filtering
+  const { data: inspectorLocation } = useReadContract({
+    address: LAND_REGISTRY_ADDRESS,
+    abi: LAND_REGISTRY_ABI,
+    functionName: "getInspectorLocation",
+    args: address ? [address] : undefined,
+  });
+
+  const { data: employeeDept } = useReadContract({
+    address: LAND_REGISTRY_ADDRESS,
+    abi: LAND_REGISTRY_ABI,
+    functionName: "getEmployeeRevenueDept",
+    args: address ? [address] : undefined,
+  });
+
+  // Determine user roles
+  const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+  const isLandInspector = inspectorLocation && Number(inspectorLocation) > 0;
+  const isRevenueEmployee = employeeDept && Number(employeeDept) > 0;
+  const isStaff = isAdmin || isLandInspector || isRevenueEmployee;
+
+  // Determine which navigation to show
+  const navItems = useMemo(() => {
+    // During SSR/initial render, show citizen nav to avoid hydration mismatch
+    if (!isMounted) {
+      return citizenNavItems;
+    }
+
+    // STAFF: Show only their role-specific pages
+    if (isAdmin) {
+      return staffNavItems.admin;
+    }
+    if (isLandInspector) {
+      return staffNavItems.inspector;
+    }
+    if (isRevenueEmployee) {
+      return staffNavItems.revenue;
+    }
+
+    // CITIZEN: Show citizen navigation
+    return citizenNavItems;
+  }, [isMounted, isAdmin, isLandInspector, isRevenueEmployee]);
+
+  // Role badge for staff
+  const getRoleBadge = () => {
+    if (!isMounted) return null;
+    if (isAdmin) return { label: "Admin", color: "bg-red-500/20 text-red-400 border-red-500/30" };
+    if (isLandInspector) return { label: "Land Inspector", color: "bg-green-500/20 text-green-400 border-green-500/30" };
+    if (isRevenueEmployee) return { label: "Revenue Dept", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" };
+    return null;
+  };
+
+  const roleBadge = getRoleBadge();
 
   return (
     <div className="min-h-screen bg-background">
@@ -74,6 +156,16 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             </Link>
           </div>
 
+          {/* Role Badge for Staff */}
+          {roleBadge && (
+            <div className="px-4 py-3 border-b border-border">
+              <div className={cn("px-3 py-2 rounded-lg border text-xs font-semibold text-center", roleBadge.color)}>
+                <Users className="w-3 h-3 inline mr-1" />
+                {roleBadge.label}
+              </div>
+            </div>
+          )}
+
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navItems.map((item) => {
@@ -97,11 +189,21 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             })}
           </nav>
 
+          {/* Staff Info Box */}
+          {isStaff && isMounted && (
+            <div className="px-4 py-3 border-t border-border">
+              <div className="p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/10 text-xs text-yellow-600/80">
+                <strong>Staff Account</strong><br />
+                You cannot register, buy, or sell land.
+              </div>
+            </div>
+          )}
+
           {/* User Section (Wallet) */}
           <div className="p-4 border-t border-border">
-             <div className="w-full">
-                <WalletConnect />
-             </div>
+            <div className="w-full">
+              <WalletConnect />
+            </div>
           </div>
         </div>
       </aside>

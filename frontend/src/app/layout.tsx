@@ -10,7 +10,6 @@ export const metadata: Metadata = {
 };
 
 import { Providers } from "./providers";
-import NoSSR from "@/components/NoSSR";
 
 export default function RootLayout({
   children,
@@ -21,9 +20,6 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={inter.className}>
         <Providers>
-          <NoSSR>
-             {/* Navbar removed as it is handled per-page (Landing vs Dashboard) */}
-          </NoSSR>
           {children}
         </Providers>
       </body>
