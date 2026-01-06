@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
 import { useState, useEffect } from "react";
@@ -9,18 +10,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
-import { MapPin, CheckCircle, XCircle, Search, FileCheck, AlertTriangle, Eye } from "lucide-react";
+import { MapPin, CheckCircle, XCircle, Search, FileCheck, AlertTriangle, Eye, Info } from "lucide-react";
+import { UserInfoModal } from "@/components/UserInfoModal";
 
 export default function InspectorDashboard() {
-    const { address } = useAccount();
+    const router = useRouter();
+    const { address, isConnected } = useAccount();
     const [isMounted, setIsMounted] = useState(false);
     const [locationId, setLocationId] = useState<string>("1");
     const [rejectPropertyId, setRejectPropertyId] = useState<bigint | null>(null);
     const [rejectReason, setRejectReason] = useState<string>("");
+    // ISSUE-19: State for user info modal
+    const [selectedUserAddress, setSelectedUserAddress] = useState<string | null>(null);
 
     useEffect(() => {
         setIsMounted(true);
     }, []);
+
+    // Redirect disconnected users
+    useEffect(() => {
+        if (isMounted && !isConnected) {
+            router.push('/');
+        }
+    }, [isConnected, router, isMounted]);
 
     const safeLocationId = locationId && !isNaN(Number(locationId)) ? BigInt(locationId) : BigInt(0);
 
@@ -250,9 +262,20 @@ export default function InspectorDashboard() {
                                     </div>
 
                                     <div className="space-y-2 text-sm mb-6">
-                                        <div className="flex justify-between p-2 rounded bg-secondary/30">
+                                        <div className="flex justify-between items-center p-2 rounded bg-secondary/30">
                                             <span className="text-muted-foreground">Applicant</span>
-                                            <span className="font-mono text-xs text-foreground">{property.owner.slice(0, 8)}...</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono text-xs text-foreground">{property.owner.slice(0, 8)}...</span>
+                                                {/* ISSUE-19: Info button */}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 w-6 p-0 hover:bg-primary/20"
+                                                    onClick={() => setSelectedUserAddress(property.owner)}
+                                                >
+                                                    <Info className="w-3.5 h-3.5 text-primary" />
+                                                </Button>
+                                            </div>
                                         </div>
                                         <div className="flex justify-between px-2">
                                             <span className="text-muted-foreground">Survey No</span>
@@ -367,6 +390,12 @@ export default function InspectorDashboard() {
                     </motion.div>
                 )}
             </main>
+            {/* ISSUE-19: User Info Modal */}
+            <UserInfoModal
+                isOpen={!!selectedUserAddress}
+                onClose={() => setSelectedUserAddress(null)}
+                userAddress={selectedUserAddress || ""}
+            />
         </DashboardLayout>
     );
 }

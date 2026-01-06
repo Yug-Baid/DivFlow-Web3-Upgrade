@@ -210,6 +210,17 @@ contract Property {
         lands[_propertyId].price = 0;
     }
 
+    // ISSUE-16 FIX: Revenue Employee rejects sale request with reason: SalePending -> Verified
+    function rejectSaleRequest(uint256 _propertyId, address _employeeId, string memory _reason) public onlyAuthorized {
+        require(lands[_propertyId].propertyId != 0, "Land does not exist");
+        require(lands[_propertyId].state == StateOfProperty.SalePending, "Property must be in SalePending state");
+
+        lands[_propertyId].employeeId = _employeeId;
+        lands[_propertyId].state = StateOfProperty.Verified;
+        lands[_propertyId].rejectedReason = _reason;
+        lands[_propertyId].price = 0;
+    }
+
     // Complete sale: -> Bought
     function updateOwner(uint256 _propertyId, address newOwner) public onlyAuthorized {
         require(lands[_propertyId].propertyId != 0, "Land does not exist");

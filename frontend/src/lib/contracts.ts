@@ -120,6 +120,17 @@ export const LAND_REGISTRY_ABI = [
     stateMutability: "nonpayable",
     type: "function",
   },
+  // ISSUE-7: Revenue Employee rejects sale request
+  {
+    inputs: [
+      { internalType: "uint256", name: "_propertyId", type: "uint256" },
+      { internalType: "string", name: "_reason", type: "string" },
+    ],
+    name: "rejectSaleRequest",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
   {
     inputs: [{ internalType: "uint256", name: "_propertyId", type: "uint256" }],
     name: "verifyProperty",
@@ -392,6 +403,14 @@ export const TRANSFER_OWNERSHIP_ABI = [
   {
     inputs: [{ internalType: "uint256", name: "_saleId", type: "uint256" }, { internalType: "address", name: "_buyer", type: "address" }, { internalType: "uint256", name: "_price", type: "uint256" }],
     name: "acceptBuyerRequest",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  // ISSUE-11: Seller rejects a buyer's purchase request
+  {
+    inputs: [{ internalType: "uint256", name: "_saleId", type: "uint256" }, { internalType: "address", name: "_buyer", type: "address" }, { internalType: "uint256", name: "_price", type: "uint256" }],
+    name: "rejectBuyerRequest",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",

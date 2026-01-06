@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
 import { useState, useEffect } from "react";
@@ -9,12 +10,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
-import { Building, CheckCircle, Search, FileCheck, ShoppingBag } from "lucide-react";
+import { Building, CheckCircle, Search, FileCheck, ShoppingBag, XCircle, Info } from "lucide-react";
+import { UserInfoModal } from "@/components/UserInfoModal";
 
 export default function RevenueDashboard() {
-  const { address } = useAccount();
+  const router = useRouter();
+  const { address, isConnected } = useAccount();
   const [isMounted, setIsMounted] = useState(false);
   const [deptId, setDeptId] = useState<string>("101");
+  const [rejectingPropertyId, setRejectingPropertyId] = useState<bigint | null>(null);
+  const [rejectReason, setRejectReason] = useState<string>("");
+  const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
+
+  // Redirect disconnected users
+  useEffect(() => {
+    if (isMounted && !isConnected) {
+      router.push('/');
+    }
+  }, [isConnected, router, isMounted]);
+
+  // ... (existing code)
+
+
+
+  // ... (render)
+
+
+  // ISSUE-19: State for user info modal
+  const [selectedUserAddress, setSelectedUserAddress] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -62,6 +85,7 @@ export default function RevenueDashboard() {
   const isAuthorized = address && authorizedEmployee && address.toLowerCase() === authorizedEmployee.toLowerCase();
 
   // B5 FIX: Handle sale approval (not initial verification - that's done by Inspector)
+  // B5 FIX: Handle sale approval (not initial verification - that's done by Inspector)
   const handleApproveSale = async (propertyId: bigint) => {
     if (!address) {
       alert("Please connect wallet");
@@ -72,6 +96,7 @@ export default function RevenueDashboard() {
       return;
     }
 
+    setActionType('approve');
     try {
       writeContract({
         address: LAND_REGISTRY_ADDRESS,
@@ -81,11 +106,43 @@ export default function RevenueDashboard() {
       });
     } catch (error) {
       console.error("Sale approval failed:", error);
+      setActionType(null);
     }
   };
 
   const handleRefresh = () => {
     refetch();
+  };
+
+  // ISSUE-7: Handle sale rejection by Revenue Employee
+  const handleRejectSale = async (propertyId: bigint) => {
+    if (!address) {
+      alert("Please connect wallet");
+      return;
+    }
+    if (!isAuthorized) {
+      alert("You are NOT the authorized employee for this department.");
+      return;
+    }
+    if (!rejectReason.trim()) {
+      alert("Please provide a reason for rejection");
+      return;
+    }
+
+    setActionType('reject');
+    try {
+      writeContract({
+        address: LAND_REGISTRY_ADDRESS,
+        abi: LAND_REGISTRY_ABI,
+        functionName: "rejectSaleRequest",
+        args: [propertyId, rejectReason],
+      });
+      setRejectingPropertyId(null);
+      setRejectReason("");
+    } catch (error) {
+      console.error("Sale rejection failed:", error);
+      setActionType(null);
+    }
   };
 
   // B5 FIX: Filter to only show properties with state 6 (SalePending)
@@ -219,9 +276,20 @@ export default function RevenueDashboard() {
                   </div>
 
                   <div className="space-y-2 text-sm mb-6">
-                    <div className="flex justify-between p-2 rounded bg-secondary/30">
+                    <div className="flex justify-between items-center p-2 rounded bg-secondary/30">
                       <span className="text-muted-foreground">Owner</span>
-                      <span className="font-mono text-xs text-foreground">{property.owner.slice(0, 8)}...</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-foreground">{property.owner.slice(0, 8)}...</span>
+                        {/* ISSUE-19: Info button */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 hover:bg-primary/20"
+                          onClick={() => setSelectedUserAddress(property.owner)}
+                        >
+                          <Info className="w-3.5 h-3.5 text-primary" />
+                        </Button>
+                      </div>
                     </div>
                     <div className="flex justify-between px-2">
                       <span className="text-muted-foreground">Survey No</span>
@@ -248,29 +316,76 @@ export default function RevenueDashboard() {
                     </div>
                   </div>
 
-                  {/* B5 FIX: Sale approval button for SalePending properties */}
-                  <div className="flex gap-3">
-                    {isAuthorized ? (
+                  {isAuthorized ? (
+                    <div className="flex gap-2">
                       <Button
                         onClick={() => handleApproveSale(property.propertyId)}
-                        disabled={isConfirming}
+                        disabled={isConfirming || rejectingPropertyId !== null}
                         className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                         size="sm"
                       >
-                        {isConfirming ? "Approving..." : "Approve Sale"}
+                        {isConfirming ? "Processing..." : "Approve Sale"}
                       </Button>
-                    ) : (
-                      <div className="w-full text-center p-2 text-xs text-muted-foreground bg-secondary/50 rounded border border-border/50">
-                        Only authorized officers can approve sales
+                      <Button
+                        onClick={() => setRejectingPropertyId(property.propertyId)}
+                        disabled={isConfirming || rejectingPropertyId !== null}
+                        className="flex-1 bg-red-600/80 hover:bg-red-700 text-white"
+                        size="sm"
+                        variant="destructive"
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="w-full text-center p-2 text-xs text-muted-foreground bg-secondary/50 rounded border border-border/50">
+                      Only authorized officers can approve/reject sales
+                    </div>
+                  )}
+
+                  {/* ISSUE-7: Rejection reason modal */}
+                  {rejectingPropertyId === property.propertyId && (
+                    <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg space-y-3">
+                      <p className="text-xs text-red-400 font-medium">Provide reason for rejection:</p>
+                      <Input
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="Enter rejection reason..."
+                        className="bg-background/50 border-red-500/30 text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleRejectSale(property.propertyId)}
+                          disabled={isConfirming || !rejectReason.trim()}
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                          size="sm"
+                        >
+                          {isConfirming ? "Rejecting..." : "Confirm Rejection"}
+                        </Button>
+                        <Button
+                          onClick={() => { setRejectingPropertyId(null); setRejectReason(""); }}
+                          variant="secondary"
+                          size="sm"
+                        >
+                          Cancel
+                        </Button>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {isConfirmed && (
                     <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
                       <div className="bg-card p-4 rounded-xl border border-border shadow-2xl animate-in zoom-in text-center">
-                        <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                        <p className="font-bold text-green-500">Sale Approved!</p>
+                        {actionType === 'reject' ? (
+                          <>
+                            <XCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+                            <p className="font-bold text-red-500">Sale Rejected</p>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                            <p className="font-bold text-green-500">Sale Approved!</p>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
@@ -286,6 +401,12 @@ export default function RevenueDashboard() {
           </motion.div>
         )}
       </main>
-    </DashboardLayout>
+      {/* ISSUE-19: User Info Modal */}
+      <UserInfoModal
+        isOpen={!!selectedUserAddress}
+        onClose={() => setSelectedUserAddress(null)}
+        userAddress={selectedUserAddress || ""}
+      />
+    </DashboardLayout >
   );
 }

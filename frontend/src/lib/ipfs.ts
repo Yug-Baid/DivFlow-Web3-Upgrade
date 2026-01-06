@@ -118,8 +118,10 @@ async function uploadToIPFSLegacy(file: File): Promise<UploadResult> {
  * @returns The gateway URL
  */
 export function getIPFSUrl(cid: string): string {
+    // Strip ipfs:// prefix if present
+    const cleanCid = cid.replace('ipfs://', '');
     // Use Pinata's dedicated gateway for better reliability
-    return `https://gateway.pinata.cloud/ipfs/${cid}`;
+    return `https://gateway.pinata.cloud/ipfs/${cleanCid}`;
 }
 
 /**

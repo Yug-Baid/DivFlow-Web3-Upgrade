@@ -92,12 +92,19 @@ export default function TrackRequests() {
         }
     }, [isRegistered, isCheckingRegistration, address, router]);
 
-    if (!isMounted) return null;
+
 
     const isLoading = isCheckingRegistration || isLoadingProperties || isLoadingInspectors || isLoadingEmployees;
 
-    // Show loading
-    if (isLoading) {
+    // Redirect disconnected users
+    useEffect(() => {
+        if (isMounted && !isConnected) {
+            router.push('/');
+        }
+    }, [isConnected, router, isMounted]);
+
+    // Show loading checks
+    if (!isMounted || isLoading) {
         return (
             <DashboardLayout>
                 <div className="flex items-center justify-center h-64">
@@ -107,20 +114,7 @@ export default function TrackRequests() {
         );
     }
 
-    // Show wallet connection prompt
-    if (!isConnected) {
-        return (
-            <DashboardLayout>
-                <GlassCard className="text-center py-20 max-w-md mx-auto">
-                    <Wallet className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold mb-2">Connect Wallet</h2>
-                    <p className="text-muted-foreground mb-4">
-                        Connect your wallet to view your property registration status.
-                    </p>
-                </GlassCard>
-            </DashboardLayout>
-        );
-    }
+    if (!isConnected) return null; // Prevent flash before redirect
 
     // Helper to format address for display
     const formatAddress = (addr: string) => {
@@ -276,14 +270,31 @@ export default function TrackRequests() {
                                     </div>
                                 )}
 
-                                {/* Rejection Reason */}
-                                {Number(property.state) === 3 && property.rejectedReason && (
+                                {/* Rejection Reason - Show for both registration rejection (state 3) and sale rejection (state 2 with reason) */}
+                                {(Number(property.state) === 3 || (Number(property.state) === 2 && property.rejectedReason)) && property.rejectedReason && (
                                     <div className="p-4 border-t border-red-500/20 bg-red-500/5">
                                         <p className="text-xs text-red-500 font-medium mb-1 flex items-center gap-1">
                                             <AlertTriangle className="w-3 h-3" />
-                                            Rejection Reason
+                                            {Number(property.state) === 3 ? "Registration Rejection Reason" : "Sale Request Rejected"}
                                         </p>
                                         <p className="text-sm text-red-400">{property.rejectedReason}</p>
+                                        {Number(property.state) === 2 && (
+                                            <p className="text-xs text-muted-foreground mt-2">
+                                                Your sale request was rejected by the Revenue Department. You can request to sell again with updated details.
+                                            </p>
+                                        )}
+                                        {Number(property.state) === 3 && (
+                                            <div className="mt-3">
+                                                <p className="text-xs text-muted-foreground mb-2">
+                                                    You can re-submit your application with corrected details.
+                                                </p>
+                                                <Link href="/register-land">
+                                                    <Button variant="secondary" size="sm" className="w-full sm:w-auto">
+                                                        Re-register Property
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </GlassCard>

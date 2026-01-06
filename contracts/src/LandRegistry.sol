@@ -48,6 +48,7 @@ contract LandRegistry {
     event PropertyVerifiedByInspector(uint256 indexed propertyId, address indexed inspector);
     event PropertyRejectedByInspector(uint256 indexed propertyId, address indexed inspector, string reason);
     event SaleRequestApproved(uint256 indexed propertyId, address indexed employee);
+    event SaleRequestRejected(uint256 indexed propertyId, address indexed employee, string reason);
 
     // ============ MAPPINGS ============
 
@@ -198,10 +199,19 @@ contract LandRegistry {
     }
 
     // Land Inspector rejects property registration
+    // ISSUE-22 FIX: Clear duplicate prevention mappings to allow re-registration
     function rejectPropertyByInspector(uint256 _propertyId, string memory _reason)
         public
         onlyLandInspector(getLocationId(_propertyId))
     {
+        // Get property details to clear mappings
+        Property.Land memory land = propertiesContract.getLandDetailsAsStruct(_propertyId);
+        
+        // ISSUE-22: Clear the duplicate prevention mappings to allow re-registration
+        bytes32 propertyKey = keccak256(abi.encodePacked(land.locationId, land.revenueDepartmentId, land.surveyNumber));
+        registeredProperties[propertyKey] = false;
+        registeredDocuments[land.ipfsHash] = false;
+        
         propertiesContract.changeStateToRejected(_propertyId, msg.sender, _reason);
         emit PropertyRejectedByInspector(_propertyId, msg.sender, _reason);
     }
@@ -215,6 +225,16 @@ contract LandRegistry {
     {
         propertiesContract.changeStateFromSalePendingToOnSale(_propertyId, msg.sender);
         emit SaleRequestApproved(_propertyId, msg.sender);
+    }
+
+    // ISSUE-7 + ISSUE-16 FIX: Revenue Employee rejects sale request with reason stored
+    function rejectSaleRequest(uint256 _propertyId, string memory _reason)
+        public
+        onlyRevenueDeptEmployee(getRevenueDeptId(_propertyId))
+    {
+        // Use the new function that properly stores the rejection reason
+        propertiesContract.rejectSaleRequest(_propertyId, msg.sender, _reason);
+        emit SaleRequestRejected(_propertyId, msg.sender, _reason);
     }
 
     // Legacy function name for backwards compatibility

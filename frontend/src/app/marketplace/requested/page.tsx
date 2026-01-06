@@ -3,14 +3,18 @@
 import { useState, useEffect, useMemo } from "react";
 
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI } from "@/lib/contracts";
+import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI, USERS_ADDRESS, USERS_ABI } from "@/lib/contracts";
 import { formatEther } from "viem";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
-import { Clock, CheckCircle, XCircle, ShoppingBag, ArrowRight, Loader2 } from "lucide-react";
+import { Clock, CheckCircle, XCircle, ShoppingBag, ArrowRight, Loader2, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
+
+// Admin address for role detection
+const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
 // RequestedUserToASaleState enum from contract
 const RequestState = {
@@ -36,12 +40,54 @@ const SaleState = {
 };
 
 export default function RequestedSales() {
-    const { address } = useAccount();
+    const router = useRouter();
+    const { address, isConnected } = useAccount();
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    // ISSUE-2: Check if user is registered
+    const { data: isRegistered, isLoading: isCheckingRegistration } = useReadContract({
+        address: USERS_ADDRESS,
+        abi: USERS_ABI,
+        functionName: "isUserRegistered",
+        args: address ? [address] : undefined,
+    });
+
+    // ISSUE-2: Staff detection
+    const { data: inspectorLocation } = useReadContract({
+        address: LAND_REGISTRY_ADDRESS,
+        abi: LAND_REGISTRY_ABI,
+        functionName: "getInspectorLocation",
+        args: address ? [address] : undefined,
+    });
+
+    const { data: employeeDept } = useReadContract({
+        address: LAND_REGISTRY_ADDRESS,
+        abi: LAND_REGISTRY_ABI,
+        functionName: "getEmployeeRevenueDept",
+        args: address ? [address] : undefined,
+    });
+
+    const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+    const isLandInspector = inspectorLocation && Number(inspectorLocation) > 0;
+    const isRevenueEmployee = employeeDept && Number(employeeDept) > 0;
+    const isStaff = isAdmin || isLandInspector || isRevenueEmployee;
+
+    // ISSUE-2: Redirect unregistered non-staff users
+    // ISSUE-2: Redirect unregistered non-staff users or disconnected users
+    useEffect(() => {
+        if (mounted && !isConnected) {
+            router.push('/');
+        } else if (!isCheckingRegistration && isRegistered === false && address && !isStaff) {
+            router.push('/register');
+        }
+    }, [isRegistered, isCheckingRegistration, address, router, isStaff, isConnected, mounted]);
+
+    // Strict guard to prevent flashing
+    if (!isConnected && mounted) return null;
 
     const { data: sales, isLoading: isLoadingSales, refetch } = useReadContract({
         address: TRANSFER_OWNERSHIP_ADDRESS,
@@ -123,36 +169,70 @@ export default function RequestedSales() {
         visible: { opacity: 1, y: 0 },
     };
 
-    const isLoading = isLoadingSales || isLoadingRequests;
+    const isLoading = isLoadingSales || isLoadingRequests || isCheckingRegistration;
 
     // Helper to get bid status display
     const getBidStatus = (bid: any, sale: any) => {
         // Check if this specific bid was accepted (matches BOTH address AND price)
-        const isThisBidAccepted = sale.state === SaleState.AcceptedToABuyer &&
-            sale.acceptedFor.toLowerCase() === address?.toLowerCase() &&
+        const isThisBidAccepted = sale.acceptedFor.toLowerCase() === address?.toLowerCase() &&
             sale.acceptedPrice === bid.priceOffered;
 
-        if (isThisBidAccepted) {
-            return { text: "Accepted! Pay Now", color: "bg-green-500/20 text-green-400", icon: CheckCircle, borderColor: "border-green-500/50" };
+        // FIX: Check if this bid was explicitly rejected by seller
+        if (bid.state === RequestState.SellerRejectedPurchaseRequest) {
+            return { text: "Rejected", color: "bg-red-500/20 text-red-400", icon: XCircle, borderColor: "border-red-500/30" };
         }
 
-        // Check if sale is completed
+        // Check if sale is completed (Success state = 3)
         if (sale.state === SaleState.Success) {
+            // Check if THIS user's bid was the winning one
             if (bid.state === RequestState.SuccessfullyTransfered) {
-                return { text: "Completed", color: "bg-secondary text-muted-foreground", icon: CheckCircle, borderColor: "border-border" };
+                return { text: "Purchased!", color: "bg-green-500/20 text-green-400", icon: CheckCircle, borderColor: "border-green-500/30" };
             }
-            return { text: "Sale Completed", color: "bg-secondary text-muted-foreground", icon: CheckCircle, borderColor: "border-border" };
+            // This user's bid was NOT the winning one
+            return { text: "Outbid", color: "bg-orange-500/20 text-orange-400", icon: XCircle, borderColor: "border-orange-500/30" };
         }
 
-        // Check if another bid was accepted (this one is declined)
+        // Sale is accepted to a buyer but not yet completed
         if (sale.state === SaleState.AcceptedToABuyer) {
-            // Sale is accepted but this specific bid wasn't chosen
-            return { text: "Declined", color: "bg-red-500/20 text-red-400", icon: XCircle, borderColor: "border-red-500/30" };
+            if (isThisBidAccepted) {
+                return { text: "Accepted! Pay Now", color: "bg-green-500/20 text-green-400", icon: CheckCircle, borderColor: "border-green-500/50" };
+            }
+            // Another bid was accepted
+            return { text: "Outbid", color: "bg-orange-500/20 text-orange-400", icon: XCircle, borderColor: "border-orange-500/30" };
         }
 
-        // Otherwise pending
+        // Otherwise pending (sale still active)
         return { text: "Pending", color: "bg-yellow-500/20 text-yellow-400", icon: Clock, borderColor: "border-yellow-500/30" };
     };
+
+    // ISSUE-2: Show loading while checking registration
+    if (isCheckingRegistration && !mounted) {
+        return (
+            <DashboardLayout>
+                <div className="flex items-center justify-center h-64">
+                    <div className="text-muted-foreground animate-pulse">Loading...</div>
+                </div>
+            </DashboardLayout>
+        );
+    }
+
+    // ISSUE-2: Block unregistered users with a message
+    if (!isRegistered && address && !isStaff && mounted) {
+        return (
+            <DashboardLayout>
+                <GlassCard className="p-8 max-w-md mx-auto text-center">
+                    <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                    <h2 className="text-xl font-bold mb-2">Registration Required</h2>
+                    <p className="text-muted-foreground mb-4">
+                        You must register your identity before viewing your purchase requests.
+                    </p>
+                    <Button onClick={() => router.push('/register')} variant="hero">
+                        Register Now
+                    </Button>
+                </GlassCard>
+            </DashboardLayout>
+        );
+    }
 
     return (
         <DashboardLayout>
@@ -217,8 +297,8 @@ export default function RequestedSales() {
 
                                             return (
                                                 <div key={idx} className={`p-3 rounded-lg border ${status.borderColor} ${isThisBidAccepted ? 'bg-green-500/10' :
-                                                        status.text === 'Declined' ? 'bg-red-500/5' :
-                                                            'bg-secondary/20'
+                                                    status.text === 'Declined' ? 'bg-red-500/5' :
+                                                        'bg-secondary/20'
                                                     }`}>
                                                     <div className="flex justify-between items-center">
                                                         <div className="flex items-center gap-2">
