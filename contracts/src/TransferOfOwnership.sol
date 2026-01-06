@@ -258,6 +258,48 @@ contract TransferOwnerShip {
         emit SaleAccepted(_saleId, _buyer, _price, sale.deadlineForPayment);
     }
 
+    // ISSUE-11: Event for buyer rejection
+    event BuyerRequestRejected(uint256 saleId, address buyer, uint256 priceOffered);
+
+    // ISSUE-11: Function, to reject a buyer's purchase request
+    function rejectBuyerRequest(
+        uint256 _saleId,
+        address _buyer,
+        uint256 _price
+    ) public {
+        // Find the sale object by its ID
+        Sales storage sale = sales[_saleId];
+
+        // Make sure the sale exists
+        require(sale.propertyId != 0, "Sale does not exist");
+
+        // Make sure the sale is still active
+        require(sale.state == SaleState.Active, "Sale is Not Active");
+
+        // Only owner of property can be allowed
+        require(
+            msg.sender == propertiesContract.getLandDetailsAsStruct(sale.propertyId).owner,
+            "Only the owner can reject the purchase request."
+        );
+
+        // Find buyer entry that matches BOTH address AND price
+        bool buyerFound = false;
+        uint256 i = 0;
+        for (i = 0; i < requestedUsers[sale.saleId].length; i++) {
+            if (requestedUsers[sale.saleId][i].user == _buyer && 
+                requestedUsers[sale.saleId][i].priceOffered == _price) {
+                buyerFound = true;
+                break;
+            }
+        }
+        require(buyerFound, "No matching request found for this buyer and price");
+
+        // Update the state of the buyer's request to rejected
+        requestedUsers[sale.saleId][i].state = RequestedUserToASaleState.SellerRejectedPurchaseRequest;
+
+        emit BuyerRequestRejected(_saleId, _buyer, _price);
+    }
+
     // function to re-request purchase request
     function rerequestPurchaseRequest(uint256 _saleId, uint256 _priceOffered) public {
         // Get the sales details

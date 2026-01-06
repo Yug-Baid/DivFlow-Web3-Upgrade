@@ -31,6 +31,72 @@ export default function AdminPage() {
     const [inspectorAddr, setInspectorAddr] = useState("");
     const [inspectorFormError, setInspectorFormError] = useState("");
 
+    // ISSUE-1: Check for existing assignments (what's assigned to this location/dept)
+    const { data: existingEmployee } = useReadContract({
+        address: LAND_REGISTRY_ADDRESS,
+        abi: LAND_REGISTRY_ABI,
+        functionName: "revenueDeptIdToEmployee",
+        args: deptId ? [BigInt(deptId)] : undefined,
+        query: { enabled: !!deptId && !isNaN(Number(deptId)) },
+    });
+
+    const { data: existingInspector } = useReadContract({
+        address: LAND_REGISTRY_ADDRESS,
+        abi: LAND_REGISTRY_ABI,
+        functionName: "landInspectorByLocation",
+        args: locationId ? [BigInt(locationId)] : undefined,
+        query: { enabled: !!locationId && !isNaN(Number(locationId)) },
+    });
+
+    // ISSUE-1 FIX: Check REVERSE mapping - is this ADDRESS already assigned to ANOTHER location/dept?
+    // Using refetchOnMount/refetchOnWindowFocus/staleTime to ensure fresh data
+    const { data: employeeCurrentDeptId, refetch: refetchEmployeeDept } = useReadContract({
+        address: LAND_REGISTRY_ADDRESS,
+        abi: LAND_REGISTRY_ABI,
+        functionName: "getEmployeeRevenueDept",
+        args: employeeAddr && isAddress(employeeAddr) ? [employeeAddr as `0x${string}`] : undefined,
+        query: {
+            enabled: !!employeeAddr && isAddress(employeeAddr),
+            staleTime: 0, // Always consider data stale
+        },
+    });
+
+    const { data: inspectorCurrentLocationId, refetch: refetchInspectorLocation } = useReadContract({
+        address: LAND_REGISTRY_ADDRESS,
+        abi: LAND_REGISTRY_ABI,
+        functionName: "getInspectorLocation",
+        args: inspectorAddr && isAddress(inspectorAddr) ? [inspectorAddr as `0x${string}`] : undefined,
+        query: {
+            enabled: !!inspectorAddr && isAddress(inspectorAddr),
+            staleTime: 0, // Always consider data stale
+        },
+    });
+
+    // Refetch when address inputs change
+    useEffect(() => {
+        if (employeeAddr && isAddress(employeeAddr)) {
+            refetchEmployeeDept();
+        }
+    }, [employeeAddr, refetchEmployeeDept]);
+
+    useEffect(() => {
+        if (inspectorAddr && isAddress(inspectorAddr)) {
+            refetchInspectorLocation();
+        }
+    }, [inspectorAddr, refetchInspectorLocation]);
+
+    // Check if addresses are valid (not zero address)
+    const hasExistingEmployee = existingEmployee && existingEmployee !== "0x0000000000000000000000000000000000000000";
+    const hasExistingInspector = existingInspector && existingInspector !== "0x0000000000000000000000000000000000000000";
+
+    // ISSUE-1 FIX: Check if the address is already assigned to a DIFFERENT location/dept
+    const employeeAssignedElsewhere = Boolean(employeeCurrentDeptId) &&
+        Number(employeeCurrentDeptId) !== 0 &&
+        Number(employeeCurrentDeptId) !== Number(deptId);
+    const inspectorAssignedElsewhere = Boolean(inspectorCurrentLocationId) &&
+        Number(inspectorCurrentLocationId) !== 0 &&
+        Number(inspectorCurrentLocationId) !== Number(locationId);
+
     // Shared write contract state
     const { writeContract, data: hash, error: writeError, reset: resetWrite } = useWriteContract();
     const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
@@ -41,7 +107,7 @@ export default function AdminPage() {
         setIsMounted(true);
     }, []);
 
-    // Reset success state after showing
+    // Reset success and error state after showing
     useEffect(() => {
         if (isConfirmed) {
             const timer = setTimeout(() => {
@@ -50,6 +116,35 @@ export default function AdminPage() {
             return () => clearTimeout(timer);
         }
     }, [isConfirmed, resetWrite]);
+
+    // ISSUE-1 FIX: Auto-clear write errors after 5 seconds
+    useEffect(() => {
+        if (writeError) {
+            const timer = setTimeout(() => {
+                resetWrite();
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [writeError, resetWrite]);
+
+    // Auto-clear form errors after 5 seconds
+    useEffect(() => {
+        if (revenueFormError) {
+            const timer = setTimeout(() => {
+                setRevenueFormError("");
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [revenueFormError]);
+
+    useEffect(() => {
+        if (inspectorFormError) {
+            const timer = setTimeout(() => {
+                setInspectorFormError("");
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [inspectorFormError]);
 
     // Check if current user is admin (contract owner)
     const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
@@ -62,6 +157,12 @@ export default function AdminPage() {
 
         if (!isAddress(employeeAddr)) {
             setRevenueFormError("Invalid Ethereum Address format.");
+            return;
+        }
+
+        // ISSUE-1 FIX: Block if address is already assigned to a different department
+        if (employeeAssignedElsewhere) {
+            setRevenueFormError(`This address is already assigned to Department #${employeeCurrentDeptId}. Remove them first.`);
             return;
         }
 
@@ -85,6 +186,12 @@ export default function AdminPage() {
 
         if (!isAddress(inspectorAddr)) {
             setInspectorFormError("Invalid Ethereum Address format.");
+            return;
+        }
+
+        // ISSUE-1 FIX: Block if address is already assigned to a different location
+        if (inspectorAssignedElsewhere) {
+            setInspectorFormError(`This address is already assigned to Location #${inspectorCurrentLocationId}. Remove them first.`);
             return;
         }
 
@@ -226,13 +333,45 @@ export default function AdminPage() {
                                 </div>
                             )}
 
+                            {/* ISSUE-1 FIX: Show RED error if address already assigned elsewhere */}
+                            {employeeAssignedElsewhere && (
+                                <div className="flex items-start gap-2 p-3 text-red-500 bg-red-500/10 rounded-md text-sm border border-red-500/30">
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-medium">Address Already Assigned!</p>
+                                        <p className="text-xs mt-1">
+                                            This wallet is already assigned to Department #{String(employeeCurrentDeptId)}.
+                                        </p>
+                                        <p className="text-xs mt-1 text-red-400">
+                                            Cannot assign to multiple departments. Remove from current assignment first.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ISSUE-1: Show existing assignment warning */}
+                            {hasExistingEmployee && !employeeAssignedElsewhere && (
+                                <div className="flex items-start gap-2 p-3 text-yellow-600 bg-yellow-500/10 rounded-md text-sm border border-yellow-500/20">
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-medium">Department Already Assigned</p>
+                                        <p className="text-xs mt-1 font-mono break-all">
+                                            Current: {existingEmployee as string}
+                                        </p>
+                                        <p className="text-xs mt-1 text-yellow-600/70">
+                                            Submitting will replace the existing employee.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             <Button
                                 type="submit"
-                                disabled={isConfirming}
+                                disabled={isConfirming || employeeAssignedElsewhere}
                                 className="w-full"
                                 variant="hero"
                             >
-                                {isConfirming ? "Processing Authorization..." : "Authorize Revenue Employee"}
+                                {isConfirming ? "Processing Authorization..." : employeeAssignedElsewhere ? "Cannot Assign (Already Used)" : "Authorize Revenue Employee"}
                             </Button>
                         </form>
                     </GlassCard>
@@ -294,12 +433,44 @@ export default function AdminPage() {
                                 </div>
                             )}
 
+                            {/* ISSUE-1 FIX: Show RED error if address already assigned elsewhere */}
+                            {inspectorAssignedElsewhere && (
+                                <div className="flex items-start gap-2 p-3 text-red-500 bg-red-500/10 rounded-md text-sm border border-red-500/30">
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-medium">Address Already Assigned!</p>
+                                        <p className="text-xs mt-1">
+                                            This wallet is already assigned to Location #{String(inspectorCurrentLocationId)}.
+                                        </p>
+                                        <p className="text-xs mt-1 text-red-400">
+                                            Cannot assign to multiple locations. Remove from current assignment first.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ISSUE-1: Show existing assignment warning */}
+                            {hasExistingInspector && !inspectorAssignedElsewhere && (
+                                <div className="flex items-start gap-2 p-3 text-yellow-600 bg-yellow-500/10 rounded-md text-sm border border-yellow-500/20">
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-medium">Location Already Assigned</p>
+                                        <p className="text-xs mt-1 font-mono break-all">
+                                            Current: {existingInspector as string}
+                                        </p>
+                                        <p className="text-xs mt-1 text-yellow-600/70">
+                                            Submitting will replace the existing inspector.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             <Button
                                 type="submit"
-                                disabled={isConfirming}
+                                disabled={isConfirming || inspectorAssignedElsewhere}
                                 className="w-full bg-green-600 hover:bg-green-700"
                             >
-                                {isConfirming ? "Processing Assignment..." : "Assign Land Inspector"}
+                                {isConfirming ? "Processing Assignment..." : inspectorAssignedElsewhere ? "Cannot Assign (Already Used)" : "Assign Land Inspector"}
                             </Button>
                         </form>
                     </GlassCard>

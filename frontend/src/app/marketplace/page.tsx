@@ -1,16 +1,23 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI, USERS_ADDRESS, USERS_ABI } from "@/lib/contracts";
 import { formatEther, parseEther } from "viem";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MapPin, Tag, ShoppingCart, Loader2 } from "lucide-react";
+import { MapPin, Tag, ShoppingCart, Loader2, Info, AlertTriangle, ImageOff } from "lucide-react";
 import { motion } from "framer-motion";
+import { UserInfoModal } from "@/components/UserInfoModal";
+import { getIPFSUrl } from "@/lib/ipfs";
+
+// Admin address for role detection
+const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
 // Property state enum for reference
 const PropertyState = {
@@ -24,9 +31,52 @@ const PropertyState = {
 };
 
 export default function Marketplace() {
+  const router = useRouter();
   const { address } = useAccount();
   const [offerPrice, setOfferPrice] = useState("");
   const [selectedSaleId, setSelectedSaleId] = useState<bigint | null>(null);
+  // ISSUE-19: State for user info modal
+  const [selectedUserAddress, setSelectedUserAddress] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // ISSUE-2: Check if user is registered
+  const { data: isRegistered, isLoading: isCheckingRegistration } = useReadContract({
+    address: USERS_ADDRESS,
+    abi: USERS_ABI,
+    functionName: "isUserRegistered",
+    args: address ? [address] : undefined,
+  });
+
+  // ISSUE-2: Staff detection
+  const { data: inspectorLocation } = useReadContract({
+    address: LAND_REGISTRY_ADDRESS,
+    abi: LAND_REGISTRY_ABI,
+    functionName: "getInspectorLocation",
+    args: address ? [address] : undefined,
+  });
+
+  const { data: employeeDept } = useReadContract({
+    address: LAND_REGISTRY_ADDRESS,
+    abi: LAND_REGISTRY_ABI,
+    functionName: "getEmployeeRevenueDept",
+    args: address ? [address] : undefined,
+  });
+
+  const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+  const isLandInspector = inspectorLocation && Number(inspectorLocation) > 0;
+  const isRevenueEmployee = employeeDept && Number(employeeDept) > 0;
+  const isStaff = isAdmin || isLandInspector || isRevenueEmployee;
+
+  // ISSUE-2: Redirect unregistered non-staff users
+  useEffect(() => {
+    if (!isCheckingRegistration && isRegistered === false && address && !isStaff) {
+      router.push('/register');
+    }
+  }, [isRegistered, isCheckingRegistration, address, router, isStaff]);
 
   const { data: allSales, isLoading: isLoadingSales, refetch } = useReadContract({
     address: TRANSFER_OWNERSHIP_ADDRESS,
@@ -57,17 +107,30 @@ export default function Marketplace() {
   });
 
   // Filter sales to only show those with property.state === 4 (OnSale)
+  // ISSUE-15 FIX: Also deduplicate by propertyId - only show the LATEST sale for each property
   const approvedSales = useMemo(() => {
     if (!propertyResults) return [];
-    return activeSales.filter((sale: any, index: number) => {
+
+    // First, filter to only OnSale properties
+    const onSaleSales = activeSales.filter((sale: any, index: number) => {
       const result = propertyResults[index];
       if (result.status === 'success' && result.result) {
         const property = result.result as any;
-        // Only show properties that Revenue has approved (OnSale state = 4)
         return property.state === PropertyState.OnSale;
       }
       return false;
     });
+
+    // ISSUE-15: Deduplicate by propertyId - keep only the latest (highest saleId) for each property
+    const propertyToLatestSale = new Map();
+    for (const sale of onSaleSales) {
+      const existingSale = propertyToLatestSale.get(sale.propertyId.toString());
+      if (!existingSale || sale.saleId > existingSale.saleId) {
+        propertyToLatestSale.set(sale.propertyId.toString(), sale);
+      }
+    }
+
+    return Array.from(propertyToLatestSale.values());
   }, [activeSales, propertyResults]);
 
   const { writeContract, data: hash, error: writeError } = useWriteContract();
@@ -111,7 +174,57 @@ export default function Marketplace() {
     visible: { opacity: 1, y: 0 },
   };
 
-  const isLoading = isLoadingSales || isLoadingProperties;
+  // ISSUE-8: Image error tracking state
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+
+  // ISSUE-8: Helper to get property IPFS hash for a sale
+  const getPropertyIpfsHash = (saleIndex: number): string | null => {
+    if (!propertyResults || !propertyResults[saleIndex]) return null;
+    const result = propertyResults[saleIndex];
+    if (result.status === 'success' && result.result) {
+      const property = result.result as any;
+      return property.ipfsHash || null;
+    }
+    return null;
+  };
+
+  // ISSUE-8: Find the original index of a sale in activeSales to get propertyResults
+  const getSalePropertyIndex = (sale: any): number => {
+    return activeSales.findIndex(
+      (s: any) => s.saleId.toString() === sale.saleId.toString()
+    );
+  };
+
+  const isLoading = isLoadingSales || isLoadingProperties || isCheckingRegistration;
+
+  // ISSUE-2: Show loading while checking registration
+  if (isCheckingRegistration && !isMounted) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-muted-foreground animate-pulse">Loading...</div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // ISSUE-2: Block unregistered users with a message
+  if (!isRegistered && address && !isStaff && isMounted) {
+    return (
+      <DashboardLayout>
+        <GlassCard className="p-8 max-w-md mx-auto text-center">
+          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Registration Required</h2>
+          <p className="text-muted-foreground mb-4">
+            You must register your identity before browsing the marketplace.
+          </p>
+          <Button onClick={() => router.push('/register')} variant="hero">
+            Register Now
+          </Button>
+        </GlassCard>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -126,11 +239,6 @@ export default function Marketplace() {
         <div>
           <p className="text-sm text-muted-foreground">
             Showing {approvedSales.length} approved listings
-            {activeSales.length > approvedSales.length && (
-              <span className="text-yellow-500 ml-2">
-                ({activeSales.length - approvedSales.length} pending Revenue approval)
-              </span>
-            )}
           </p>
         </div>
         <Button variant="ghost-glow" onClick={() => refetch()} size="sm">
@@ -144,11 +252,6 @@ export default function Marketplace() {
         <GlassCard className="text-center py-20">
           <h3 className="text-lg font-medium text-foreground">No Properties Found</h3>
           <p className="text-muted-foreground">No Revenue-approved properties listed for sale at the moment.</p>
-          {activeSales.length > 0 && (
-            <p className="text-yellow-500 text-sm mt-2">
-              {activeSales.length} properties are pending Revenue approval.
-            </p>
-          )}
         </GlassCard>
       ) : (
         <motion.div
@@ -161,25 +264,61 @@ export default function Marketplace() {
             <motion.div key={sale.saleId.toString()} variants={itemVariants}>
               <GlassCard hover className="group relative overflow-hidden">
                 {/* Visual Header */}
-                <div className={`aspect-video rounded-xl bg-gradient-to-br ${gradients[index % gradients.length]} mb-4 relative overflow-hidden`}>
-                  <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+                <div className={`aspect-video rounded-xl bg-gradient-to-br ${gradients[index % gradients.length]} mb-4 relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-300`}>
+                  {/* ISSUE-8: Render IPFS Image if available */}
+                  {(() => {
+                    const saleIndex = getSalePropertyIndex(sale);
+                    const ipfsHash = getPropertyIpfsHash(saleIndex);
+                    const imageUrl = ipfsHash ? getIPFSUrl(ipfsHash) : null;
+                    const hasError = ipfsHash ? imageErrors[ipfsHash] : false;
+
+                    if (imageUrl && !hasError) {
+                      return (
+                        <div className="absolute inset-0">
+                          <Image
+                            src={imageUrl}
+                            alt={`Property ${sale.propertyId.toString()}`}
+                            fill
+                            className="object-cover"
+                            onError={() => setImageErrors(prev => ({ ...prev, [ipfsHash!]: true }))}
+                            unoptimized // Important for external IPFS images
+                          />
+                          <div className="absolute inset-0 bg-black/20" />
+                        </div>
+                      );
+                    } else if (hasError) {
+                      // Show specific UI for broken image
+                      return (
+                        <div className="absolute inset-0 flex items-center justify-center bg-secondary/50">
+                          <div className="flex flex-col items-center text-muted-foreground/50">
+                            <ImageOff className="w-8 h-8 mb-1" />
+                            <span className="text-xs">Image Unavailable</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent" />
 
                   {/* Tags */}
-                  <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
-                    <span className="px-3 py-1 rounded-full bg-black/40 backdrop-blur-md text-white text-sm font-bold border border-white/10">
+                  <div className="absolute top-3 right-3 flex flex-col gap-2 items-end z-10">
+                    <span className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-sm font-bold border border-white/10 shadow-lg">
                       {formatEther(sale.price)} ETH
                     </span>
                     {sale.owner === address && (
-                      <span className="px-2 py-1 rounded-full bg-yellow-500/80 text-black text-xs font-bold shadow-lg">
+                      <span className="px-2 py-1 rounded-full bg-yellow-500 text-black text-xs font-bold shadow-lg flex items-center gap-1">
+                        <Tag className="w-3 h-3" />
                         Your Listing
                       </span>
                     )}
                   </div>
 
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <div className="flex items-center gap-2 text-foreground">
-                      <MapPin className="w-4 h-4" />
-                      <span className="text-sm font-mono tracking-tighter">Sale #{sale.saleId.toString()}</span>
+                  <div className="absolute bottom-3 left-3 right-3 z-10">
+                    <div className="flex items-center gap-2 text-foreground/90">
+                      <MapPin className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-mono tracking-tighter text-white">Sale #{sale.saleId.toString()}</span>
                     </div>
                   </div>
                 </div>
@@ -192,9 +331,20 @@ export default function Marketplace() {
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <p className="text-sm text-muted-foreground">Seller</p>
-                      <p className="text-xs text-muted-foreground font-mono bg-secondary/50 px-2 py-1 rounded">
-                        {sale.owner.slice(0, 6)}...{sale.owner.slice(-4)}
-                      </p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-xs text-muted-foreground font-mono bg-secondary/50 px-2 py-1 rounded">
+                          {sale.owner.slice(0, 6)}...{sale.owner.slice(-4)}
+                        </p>
+                        {/* ISSUE-19: Info button */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 hover:bg-primary/20"
+                          onClick={() => setSelectedUserAddress(sale.owner)}
+                        >
+                          <Info className="w-3.5 h-3.5 text-primary" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
@@ -264,6 +414,13 @@ export default function Marketplace() {
           <p className="text-sm">{writeError.message.split('\n')[0].slice(0, 100)}...</p>
         </div>
       )}
+
+      {/* ISSUE-19: User Info Modal */}
+      <UserInfoModal
+        isOpen={!!selectedUserAddress}
+        onClose={() => setSelectedUserAddress(null)}
+        userAddress={selectedUserAddress || ""}
+      />
 
     </DashboardLayout>
   );

@@ -91,7 +91,7 @@ export default function RegisterLand() {
 
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [generatedHash, setGeneratedHash] = useState<string>("");
-  const [landType, setLandType] = useState<number>(0); // 0 = WithPapers, 1 = WithoutPapers
+  // landType is always 0 (WithPapers) - removed dropdown per ISSUE-4
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -165,7 +165,7 @@ export default function RegisterLand() {
       BigInt(formData.surveyNumber),
       BigInt(formData.area),
       generatedHash,
-      landType // NEW: Land type (0=WithPapers, 1=WithoutPapers)
+      0 // ISSUE-4: Always WithPapers - only valid paperwork allowed
     ] as const;
 
     // BUG 1 & 7 FIX: Simulate transaction first to catch reverts before spending gas
@@ -380,34 +380,7 @@ export default function RegisterLand() {
               </div>
             </div>
 
-            {/* Land Type Selector - NEW */}
-            <div className="space-y-2">
-              <Label htmlFor="landType">Land Type</Label>
-              <Select value={landType.toString()} onValueChange={(val) => setLandType(parseInt(val))}>
-                <SelectTrigger className="bg-secondary/50 border-input">
-                  <SelectValue placeholder="Select land type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4" />
-                      <span>With Government Papers</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="1">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      <span>Without Papers (Fresh Survey)</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {landType === 0
-                  ? "Existing land with government deed/title documents"
-                  : "Unregistered land requiring fresh survey report"}
-              </p>
-            </div>
+            {/* ISSUE-4: Land Type Selector removed - only lands with valid paperwork allowed */}
 
             {/* File Upload for Document - IPFS Upload */}
             <div className="space-y-2">
