@@ -82,7 +82,7 @@ export default function Dashboard() {
   });
 
   const stats = [
-    { label: "Total Properties", value: properties ? (properties as any[]).length.toString() : "0", icon: MapPin },
+    { label: "Total Properties", value: properties ? (properties as any[]).filter(p => p.state !== 3).length.toString() : "0", icon: MapPin },
     { label: "Total Value", value: balance ? `${Number(balance.formatted).toFixed(4)} ${balance.symbol}` : "---", icon: TrendingUp },
     { label: "Account Age", value: "Active", icon: Clock },
   ];
@@ -243,7 +243,7 @@ export default function Dashboard() {
             animate="visible"
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
-            {(properties as any[]).map((property: any) => (
+            {(properties as any[]).filter((p: any) => p.state !== 3).map((property: any) => (
               <motion.div key={property.propertyId.toString()} variants={itemVariants}>
                 <GlassCard hover className="group h-full flex flex-col justify-between">
                   <div>
