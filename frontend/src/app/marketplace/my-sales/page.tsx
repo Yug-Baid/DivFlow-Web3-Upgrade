@@ -123,15 +123,7 @@ export default function MySales() {
     }, [publicClient, mySales]); // mySales is now stable thanks to useMemo
 
 
-    // ISSUE-USER-REPORT: Fetch property details to check approval status
-    const { data: propertyResults, isLoading: isLoadingProperties } = useReadContracts({
-        contracts: mySales.map((sale: any) => ({
-            address: LAND_REGISTRY_ADDRESS as `0x${string}`,
-            abi: LAND_REGISTRY_ABI,
-            functionName: "getPropertyDetails",
-            args: [sale.propertyId],
-        })),
-    });
+
 
     // ISSUE-USER-REPORT: Fetch property details to check approval status
     const { data: propertyResults, isLoading: isLoadingProperties } = useReadContracts({
@@ -217,14 +209,21 @@ export default function MySales() {
                                 // Must be Active (0) or Accepted (1).
                                 // Even if propertyState is 4 (OnSale), if 'this' sale is sold (3), it's history.
                                 const saleState = Number(item.state);
-                                const isStateActive = saleState === 0 || saleState === 1;
+                                const isSaleActive = saleState === 0 || saleState === 1;
+
+                                // FIX: Check Property State.
+                                // If Property is Verified (2), it means the Sale Request was REJECTED by Revenue.
+                                // It is no longer "Active" even if the Sale struct says Active.
+                                // Valid Active States: OnSale (4) or SalePending (6).
+                                const propertyVal = Number(item.propertyState);
+                                const isPropertyActive = propertyVal === 4 || propertyVal === 6;
 
                                 // FIX: Must also be the CURRENT owner of the property.
                                 // If I sold it (via another sale or transfer), I am no longer the owner.
                                 // My old sale request is effectively invalid/stale.
                                 const isCurrentOwner = item.propertyOwner && address && item.propertyOwner.toLowerCase() === address.toLowerCase();
 
-                                return isStateActive && isCurrentOwner;
+                                return isSaleActive && isPropertyActive && isCurrentOwner;
                             });
 
                             // Deduplicate properties (if somehow multiple active sales exist for same property - shouldn't happen but good safety)
