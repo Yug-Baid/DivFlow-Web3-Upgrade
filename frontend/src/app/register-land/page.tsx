@@ -10,10 +10,9 @@ import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MapPin, Building, Ruler, Hash, ArrowLeft, Upload, AlertTriangle, FileText, Loader2, Cloud, ShieldX } from "lucide-react";
-import { keccak256, encodePacked } from "viem";
-import { uploadToIPFS, isPinataConfigured, getIPFSUrl } from "@/lib/ipfs";
+import { MapPin, Building, Ruler, Hash, ArrowLeft, Upload, AlertTriangle, FileText, Loader2, Cloud, ShieldX, Image as ImageIcon, Plus } from "lucide-react";
+import { uploadToIPFS, uploadMetadata, isPinataConfigured, PropertyMetadata } from "@/lib/ipfs";
+import DynamicMap from "@/components/shared/DynamicMap";
 
 // Admin address for role detection
 const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -24,6 +23,15 @@ export default function RegisterLand() {
   const { writeContract, data: hash, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
     hash,
+  });
+
+  const [formData, setFormData] = useState({
+    locationId: "",
+    revenueDeptId: "",
+    surveyNumber: "",
+    area: "",
+    lat: 20.5937, // Default center
+    lng: 78.9629,
   });
 
   // Check if user is registered
@@ -41,6 +49,26 @@ export default function RegisterLand() {
     functionName: "getInspectorLocation",
     args: address ? [address] : undefined,
   });
+
+  // AUTO-GENERATE SURVEY NUMBER
+  // Fetch properties for the current location to determine the next survey number
+  const safeLocationId = formData.locationId && !isNaN(Number(formData.locationId)) ? BigInt(formData.locationId) : undefined;
+
+  const { data: locationProperties, isLoading: isLoadingLocationProps } = useReadContract({
+    address: LAND_REGISTRY_ADDRESS,
+    abi: LAND_REGISTRY_ABI,
+    functionName: "getPropertiesByLocation",
+    args: safeLocationId !== undefined ? [safeLocationId] : undefined,
+    query: { enabled: !!safeLocationId }
+  });
+
+  // Effect to update survey number when location properties load
+  useEffect(() => {
+    if (locationProperties) {
+      const nextSurveyNo = (locationProperties as any[]).length + 1;
+      setFormData(prev => ({ ...prev, surveyNumber: nextSurveyNo.toString() }));
+    }
+  }, [locationProperties]);
 
   const { data: employeeDept } = useReadContract({
     address: LAND_REGISTRY_ADDRESS,
@@ -63,8 +91,14 @@ export default function RegisterLand() {
         revenueDeptId: "",
         surveyNumber: "",
         area: "",
+        lat: 20.5937, // Default center
+        lng: 78.9629,
       });
-      setDocumentFile(null);
+      setFiles({
+        coverPhoto: null,
+        deedDocument: null,
+        extraPhotos: []
+      });
       setGeneratedHash("");
 
       // Redirect to dashboard after showing success message
@@ -82,17 +116,21 @@ export default function RegisterLand() {
     }
   }, [isRegistered, isCheckingRegistration, address, router, isStaff]);
 
-  const [formData, setFormData] = useState({
-    locationId: "",
-    revenueDeptId: "",
-    surveyNumber: "",
-    area: "",
+
+
+  const [files, setFiles] = useState<{
+    coverPhoto: File | null;
+    deedDocument: File | null;
+    extraPhotos: File[];
+  }>({
+    coverPhoto: null,
+    deedDocument: null,
+    extraPhotos: []
   });
 
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [generatedHash, setGeneratedHash] = useState<string>("");
-  // landType is always 0 (WithPapers) - removed dropdown per ISSUE-4
   const [isUploading, setIsUploading] = useState(false);
+  const [currentUploadStep, setCurrentUploadStep] = useState<string>("");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -107,68 +145,152 @@ export default function RegisterLand() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Upload file to IPFS via Pinata
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleLocationSelect = (lat: number, lng: number) => {
+    // AUTO-ID GENERATION (MOCK LOGIC)
+    // In a real app, this would query a GIS backend to get the administrative boundaries.
+    // Here we simulate it based on coordinate ranges or simple hashing for demo purposes.
 
-    setDocumentFile(file);
+    // Simulate "Region Code" (Location ID) based on latitude integer
+    const mockLocationId = Math.floor(lat * 1000).toString().slice(0, 6);
+
+    // Simulate "Revenue Dept ID" based on longitude integer
+    const mockRevenueId = Math.floor(lng * 10).toString().slice(0, 3);
+
+    // Auto-fill the form
+    setFormData(prev => ({
+      ...prev,
+      lat,
+      lng,
+      locationId: mockLocationId,
+      revenueDeptId: mockRevenueId
+    }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'cover' | 'deed' | 'extra') => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    if (type === 'cover') {
+      setFiles(prev => ({ ...prev, coverPhoto: selectedFiles[0] }));
+    } else if (type === 'deed') {
+      setFiles(prev => ({ ...prev, deedDocument: selectedFiles[0] }));
+    } else if (type === 'extra') {
+      const newPhotos = [...files.extraPhotos, ...Array.from(selectedFiles)];
+      if (newPhotos.length > 5) {
+        // Show error or just truncate? User said "5 images should be a hard limit"
+        // I'll truncate and warn.
+        alert("You can only upload a maximum of 5 additional photos.");
+        setFiles(prev => ({
+          ...prev,
+          extraPhotos: newPhotos.slice(0, 5)
+        }));
+      } else {
+        setFiles(prev => ({
+          ...prev,
+          extraPhotos: newPhotos
+        }));
+      }
+    }
     setUploadError(null);
-    setGeneratedHash("");
+  };
 
-    // Check if Pinata is configured
-    if (!isPinataConfigured()) {
-      // Fallback: Generate local hash for demo
-      const fileData = `${file.name}-${file.size}-${file.lastModified}-${address}`;
-      const hash = keccak256(encodePacked(['string'], [fileData]));
-      const ipfsLikeHash = `Qm${hash.slice(2, 48)}`;
-      setGeneratedHash(ipfsLikeHash);
-      setUploadError("Pinata not configured - using local hash for demo");
+  const removeExtraPhoto = (index: number) => {
+    setFiles(prev => ({
+      ...prev,
+      extraPhotos: prev.extraPhotos.filter((_, i) => i !== index)
+    }));
+  };
+
+  const uploadAndSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+    setUploadError(null);
+
+    // Validation
+    if (!files.coverPhoto) {
+      setSubmitError("Please upload a Cover Photo for the marketplace.");
+      return;
+    }
+    if (!files.deedDocument) {
+      setSubmitError("Please upload the Property Deed Document.");
       return;
     }
 
     setIsUploading(true);
+    setGeneratedHash(""); // Reset hash
+
     try {
-      const result = await uploadToIPFS(file);
-      if (result.success && result.cid) {
-        setGeneratedHash(result.cid);
-      } else {
-        setUploadError(result.error || "Upload failed");
-        // Fallback to local hash
-        const fileData = `${file.name}-${file.size}-${file.lastModified}-${address}`;
-        const hash = keccak256(encodePacked(['string'], [fileData]));
-        setGeneratedHash(`Qm${hash.slice(2, 48)}`);
+      // 1. Upload Cover Photo
+      setCurrentUploadStep("Uploading Cover Photo...");
+      const coverResult = await uploadToIPFS(files.coverPhoto);
+      if (!coverResult.success || !coverResult.cid) throw new Error(coverResult.error || "Failed to upload Cover Photo");
+
+      // 2. Upload Deed
+      setCurrentUploadStep("Uploading Deed Document...");
+      const deedResult = await uploadToIPFS(files.deedDocument);
+      if (!deedResult.success || !deedResult.cid) throw new Error(deedResult.error || "Failed to upload Deed");
+
+      // 3. Upload Extra Photos (Parallel)
+      let photoCids: string[] = [];
+      if (files.extraPhotos.length > 0) {
+        setCurrentUploadStep(`Uploading ${files.extraPhotos.length} Extra Photos...`);
+        const photoPromises = files.extraPhotos.map(f => uploadToIPFS(f));
+        const photoResults = await Promise.all(photoPromises);
+
+        // check for errors
+        const failed = photoResults.find(r => !r.success);
+        if (failed) throw new Error(failed.error || "Failed to upload one or more extra photos");
+
+        photoCids = photoResults.map(r => r.cid!).filter(Boolean);
       }
+
+      // 4. Construct Metadata
+      const metadata: PropertyMetadata = {
+        name: `Property ${formData.surveyNumber}`,
+        description: `Land registered in Revenue Dept ${formData.revenueDeptId}, Survey No. ${formData.surveyNumber}`,
+        image: `ipfs://${coverResult.cid}`,
+        properties: {
+          deed: `ipfs://${deedResult.cid}`,
+          photos: photoCids.map(cid => `ipfs://${cid}`),
+          location: {
+            lat: formData.lat,
+            lng: formData.lng
+          },
+          owner: address
+        }
+      };
+
+      // 5. Upload Metadata
+      setCurrentUploadStep("Finalizing Registration Data...");
+      const metadataResult = await uploadMetadata(metadata);
+      if (!metadataResult.success || !metadataResult.cid) throw new Error(metadataResult.error || "Failed to upload Metadata");
+
+      const finalIpfsHash = metadataResult.cid;
+      setGeneratedHash(finalIpfsHash);
+
+      // 6. Submit to Blockchain
+      await submitToBlockchain(finalIpfsHash);
+
     } catch (err: any) {
-      setUploadError(err.message || "IPFS upload failed");
-      // Fallback to local hash
-      const fileData = `${file.name}-${file.size}-${file.lastModified}-${address}`;
-      const hash = keccak256(encodePacked(['string'], [fileData]));
-      setGeneratedHash(`Qm${hash.slice(2, 48)}`);
-    } finally {
+      console.error("Upload process failed:", err);
+      setUploadError(err.message || "Failed to upload files. Please try again.");
       setIsUploading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitError(null);
-
-    if (!generatedHash) {
-      setSubmitError("Please upload a document first");
-      return;
-    }
+  const submitToBlockchain = async (ipfsHash: string) => {
+    setCurrentUploadStep("Waiting for Wallet Confirmation...");
 
     const args = [
       BigInt(formData.locationId),
       BigInt(formData.revenueDeptId),
       BigInt(formData.surveyNumber),
       BigInt(formData.area),
-      generatedHash,
-      0 // ISSUE-4: Always WithPapers - only valid paperwork allowed
+      ipfsHash,
+      0 // ISSUE-4: Always WithPapers
     ] as const;
 
-    // BUG 1 & 7 FIX: Simulate transaction first to catch reverts before spending gas
+    // Simulate first
     try {
       await publicClient?.simulateContract({
         address: LAND_REGISTRY_ADDRESS,
@@ -179,10 +301,11 @@ export default function RegisterLand() {
       });
     } catch (simError: any) {
       setSubmitError(getErrorMessage(simError));
-      return; // Don't send transaction if simulation fails
+      setIsUploading(false);
+      return;
     }
 
-    // Proceed with actual transaction
+    // Write Contract
     try {
       writeContract({
         address: LAND_REGISTRY_ADDRESS,
@@ -193,101 +316,31 @@ export default function RegisterLand() {
     } catch (error: any) {
       console.error("Registration failed:", error);
       setSubmitError(getErrorMessage(error));
+      setIsUploading(false);
     }
+    // Note: isUploading stays true until tx is confirmed or rejected, but strict state mgmt happens in useEffect
+    setIsUploading(false);
   };
 
-  // Parse user-friendly error message from contract revert
+  // Parse error message (reused)
   const getErrorMessage = (error: any): string => {
     if (!error) return "";
-
-    // Extract message from various error formats (wagmi/viem)
-    let msg = "";
-
-    // Check for shortMessage (viem ContractFunctionExecutionError)
-    if (error.shortMessage) {
-      msg = error.shortMessage;
-    }
-    // Check for cause with shortMessage
-    else if (error.cause?.shortMessage) {
-      msg = error.cause.shortMessage;
-    }
-    // Check for cause.reason (contract revert reason)
-    else if (error.cause?.reason) {
-      msg = error.cause.reason;
-    }
-    // Check for data.message
-    else if (error.data?.message) {
-      msg = error.data.message;
-    }
-    // Fall back to error.message
-    else if (error.message) {
-      msg = error.message;
-    }
-
-    // Match specific contract error messages
-    if (msg.includes("Property already registered") || msg.includes("already registered with these identifiers")) {
-      return "This property (Location + Revenue Dept + Survey Number) is already registered!";
-    }
-    if (msg.includes("IPFS hash") || msg.includes("document") || msg.includes("already registered to another")) {
-      return "This document has already been used for another property registration!";
-    }
-    if (msg.includes("User denied") || msg.includes("rejected") || msg.includes("user rejected")) {
-      return "Transaction was rejected by user";
-    }
-    if (msg.includes("insufficient funds")) {
-      return "Insufficient funds for gas fees";
-    }
-
-    // Return cleaned error message (first line, trimmed)
-    const cleanMsg = msg.split('\n')[0].replace(/^Error:\s*/i, '').trim();
-    return cleanMsg.slice(0, 200) || "Transaction failed. Please try again.";
+    let msg = error.shortMessage || error.cause?.shortMessage || error.cause?.reason || error.message || "";
+    if (msg.includes("Property already registered")) return "This property is already registered!";
+    if (msg.includes("User denied")) return "Transaction was rejected by user";
+    return msg.slice(0, 200) || "Transaction failed.";
   };
 
   if (!isMounted) return null;
 
-  // STAFF ACCESS DENIED: Block staff from registering land
+  // STAFF ACCESS DENIED
   if (isStaff) {
     return (
       <DashboardLayout>
         <GlassCard className="p-8 max-w-md mx-auto text-center">
           <ShieldX className="w-12 h-12 text-destructive mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2 text-destructive">Access Denied</h2>
-          <p className="text-muted-foreground mb-4">
-            Government staff members cannot register land properties.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            As a {isAdmin ? "Admin" : isLandInspector ? "Land Inspector" : "Revenue Employee"},
-            you can only verify/approve land registrations, not create them.
-          </p>
-        </GlassCard>
-      </DashboardLayout>
-    );
-  }
-
-  // Show loading while checking registration
-  if (isCheckingRegistration) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-muted-foreground">Checking registration status...</div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  // Block unregistered users
-  if (!isRegistered && address) {
-    return (
-      <DashboardLayout>
-        <GlassCard className="p-8 max-w-md mx-auto text-center">
-          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">Registration Required</h2>
-          <p className="text-muted-foreground mb-4">
-            You must register your identity before registering properties.
-          </p>
-          <Button onClick={() => router.push('/register')} variant="hero">
-            Register Now
-          </Button>
+          <p className="text-muted-foreground">Staff cannot register land.</p>
         </GlassCard>
       </DashboardLayout>
     );
@@ -301,163 +354,185 @@ export default function RegisterLand() {
         </Link>
       </div>
 
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <GlassCard className="p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/20">
-              <MapPin className="w-8 h-8 text-primary-foreground" />
-            </div>
             <h1 className="text-2xl font-bold text-foreground">Register New Land</h1>
             <p className="text-muted-foreground mt-2">
-              Enter property details to register on blockchain
+              Upload documents, pick location, and register on blockchain
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={uploadAndSubmit} className="space-y-8">
+
+            {/* Section 1: Property Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="locationId">Location ID</Label>
+                <Label htmlFor="locationId">Location ID (Region Code)</Label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="locationId"
-                    type="number"
-                    name="locationId"
-                    required
-                    className="pl-10 bg-secondary/50 border-input"
-                    value={formData.locationId}
-                    onChange={handleChange}
-                  />
+                  <Input id="locationId" name="locationId" type="number" required className="pl-10 bg-secondary/50 border-input" value={formData.locationId} onChange={handleChange} placeholder="e.g. 560001" />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="revenueDeptId">Revenue Dept ID</Label>
                 <div className="relative">
                   <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="revenueDeptId"
-                    type="number"
-                    name="revenueDeptId"
-                    required
-                    className="pl-10 bg-secondary/50 border-input"
-                    value={formData.revenueDeptId}
-                    onChange={handleChange}
-                  />
+                  <Input id="revenueDeptId" name="revenueDeptId" type="number" required className="pl-10 bg-secondary/50 border-input" value={formData.revenueDeptId} onChange={handleChange} placeholder="e.g. 101" />
                 </div>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="surveyNumber">Survey Number</Label>
+                <Label htmlFor="surveyNumber">Survey Number (Auto-Generated)</Label>
                 <div className="relative">
                   <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     id="surveyNumber"
-                    type="number"
                     name="surveyNumber"
+                    type="number"
                     required
-                    className="pl-10 bg-secondary/50 border-input"
+                    readOnly
+                    className="pl-10 bg-secondary/30 border-input cursor-not-allowed opacity-80"
                     value={formData.surveyNumber}
                     onChange={handleChange}
+                    placeholder="Auto-generated..."
                   />
+                  {isLoadingLocationProps && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="area">Area (sq. ft)</Label>
                 <div className="relative">
                   <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="area"
-                    type="number"
-                    name="area"
-                    required
-                    className="pl-10 bg-secondary/50 border-input"
-                    value={formData.area}
-                    onChange={handleChange}
-                  />
+                  <Input id="area" name="area" type="number" required className="pl-10 bg-secondary/50 border-input" value={formData.area} onChange={handleChange} placeholder="e.g. 1200" />
                 </div>
               </div>
             </div>
 
-            {/* ISSUE-4: Land Type Selector removed - only lands with valid paperwork allowed */}
-
-            {/* File Upload for Document - IPFS Upload */}
+            {/* Section 2: Map Location */}
             <div className="space-y-2">
-              <Label htmlFor="document">Upload Land Deed Document</Label>
-              <div className="relative">
-                <input
-                  id="document"
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  disabled={isUploading}
+              <Label>Property Location on Map</Label>
+              <p className="text-xs text-muted-foreground mb-2">Click on the map to pin the exact location of the property.</p>
+              <div className="border border-border rounded-lg overflow-hidden shadow-inner">
+                <DynamicMap
+                  onLocationSelect={handleLocationSelect}
+                  initialLat={formData.lat}
+                  initialLng={formData.lng}
                 />
-                <label
-                  htmlFor="document"
-                  className={`flex items-center gap-3 p-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors bg-secondary/30 ${isUploading ? "border-primary animate-pulse" : "border-border hover:border-primary"
-                    }`}
-                >
-                  {isUploading ? (
-                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                  ) : (
-                    <Upload className="w-8 h-8 text-muted-foreground" />
-                  )}
-                  <div>
-                    <p className="text-sm font-medium">
-                      {isUploading
-                        ? "Uploading to IPFS..."
-                        : documentFile
-                          ? documentFile.name
-                          : "Click to upload document"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {isUploading
-                        ? "Please wait while your document is being pinned to IPFS"
-                        : "PDF, JPG, PNG (Land deed, survey map, etc.)"}
-                    </p>
+              </div>
+              <div className="flex gap-4 text-xs font-mono text-muted-foreground bg-secondary/30 p-2 rounded">
+                <span>Lat: {formData.lat.toFixed(6)}</span>
+                <span>Lng: {formData.lng.toFixed(6)}</span>
+              </div>
+            </div>
+
+            {/* Section 3: Documents & Photos */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Cover Photo */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4" /> Cover Photo <span className="text-destructive">*</span>
+                </Label>
+                <p className="text-xs text-muted-foreground">Main image for marketplace listing (JPG/PNG)</p>
+                <label className="block p-4 border-2 border-dashed border-border hover:border-primary rounded-lg cursor-pointer transition-colors bg-secondary/20">
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'cover')} />
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    {files.coverPhoto ? (
+                      <>
+                        <div className="text-primary font-medium truncate w-full">{files.coverPhoto.name}</div>
+                        <div className="text-xs text-muted-foreground">Click to change</div>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-8 h-8 text-muted-foreground" />
+                        <span className="text-sm">Upload Cover Photo</span>
+                      </>
+                    )}
                   </div>
-                  {generatedHash && !isUploading && (
-                    <Cloud className="w-6 h-6 text-green-500 ml-auto" />
-                  )}
                 </label>
               </div>
-              {uploadError && (
-                <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                  <p className="text-xs text-yellow-500">{uploadError}</p>
-                </div>
-              )}
-              {generatedHash && (
-                <div className="mt-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <p className="text-xs text-green-500 font-medium flex items-center gap-1">
-                    <Cloud className="w-3 h-3" /> IPFS Hash (CID):
-                  </p>
-                  <p className="text-xs font-mono text-muted-foreground break-all">{generatedHash}</p>
-                </div>
-              )}
+
+              {/* Deed Document */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" /> Deed Document <span className="text-destructive">*</span>
+                </Label>
+                <p className="text-xs text-muted-foreground">Official Government Deed (PDF/Image)</p>
+                <label className="block p-4 border-2 border-dashed border-border hover:border-primary rounded-lg cursor-pointer transition-colors bg-secondary/20">
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={(e) => handleFileChange(e, 'deed')} />
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    {files.deedDocument ? (
+                      <>
+                        <div className="text-primary font-medium truncate w-full">{files.deedDocument.name}</div>
+                        <div className="text-xs text-muted-foreground">Click to change</div>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-8 h-8 text-muted-foreground" />
+                        <span className="text-sm">Upload Deed (PDF)</span>
+                      </>
+                    )}
+                  </div>
+                </label>
+              </div>
             </div>
 
-            {/* Submit Error Display */}
-            {submitError && (
-              <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold">Registration Error</p>
-                    <p className="text-xs mt-1">{submitError}</p>
+            {/* Extra Photos */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Plus className="w-4 h-4" /> Additional Photos <span className="text-xs text-muted-foreground font-normal">(Optional - Max 5 recommended)</span>
+              </Label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {files.extraPhotos.map((file, i) => (
+                  <div key={i} className="relative group aspect-square bg-secondary rounded-lg flex items-center justify-center overflow-hidden border border-border">
+                    <span className="text-xs text-center p-2 truncate w-full">{file.name}</span>
+                    <button type="button" onClick={() => removeExtraPhoto(i)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                      Remove
+                    </button>
                   </div>
-                </div>
+                ))}
+                <label className="aspect-square border-2 border-dashed border-border hover:border-primary rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors text-muted-foreground hover:text-primary">
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFileChange(e, 'extra')} />
+                  <Plus className="w-6 h-6 mb-1" />
+                  <span className="text-xs">Add</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Submission Status */}
+            {uploadError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" /> {uploadError}
+              </div>
+            )}
+            {submitError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" /> {submitError}
               </div>
             )}
 
             <Button
               type="submit"
-              disabled={isConfirming || !generatedHash || isUploading}
+              disabled={isConfirming || isUploading}
               className="w-full"
               variant="hero"
             >
-              {isConfirming ? "Confirming..." : isUploading ? "Uploading..." : "Register Property"}
+              {isConfirming ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Confirming Transaction...
+                </>
+              ) : isUploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  {currentUploadStep}
+                </>
+              ) : (
+                "Register Property"
+              )}
             </Button>
           </form>
 
@@ -466,18 +541,6 @@ export default function RegisterLand() {
           {isConfirmed && (
             <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-green-500 text-center text-sm font-bold animate-in bounce-in">
               Success! Redirecting to dashboard...
-            </div>
-          )}
-
-          {writeError && (
-            <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold">Registration Failed</p>
-                  <p className="text-xs mt-1">{getErrorMessage(writeError)}</p>
-                </div>
-              </div>
             </div>
           )}
 

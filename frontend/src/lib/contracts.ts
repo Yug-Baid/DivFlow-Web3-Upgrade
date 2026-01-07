@@ -37,6 +37,72 @@ export const LAND_REGISTRY_ABI = [
     stateMutability: "nonpayable",
     type: "function",
   },
+  // ============ EVENTS ============
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "address", name: "owner", type: "address" },
+      { indexed: true, internalType: "uint256", name: "propertyId", type: "uint256" }
+    ],
+    name: "LandAdded",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "locationId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "inspector", type: "address" }
+    ],
+    name: "LandInspectorAssigned",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "deptId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "employee", type: "address" }
+    ],
+    name: "RevenuEmployeeAssigned",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "propertyId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "inspector", type: "address" }
+    ],
+    name: "PropertyVerifiedByInspector",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "propertyId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "inspector", type: "address" },
+      { indexed: false, internalType: "string", name: "reason", type: "string" }
+    ],
+    name: "PropertyRejectedByInspector",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "propertyId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "employee", type: "address" }
+    ],
+    name: "SaleRequestApproved",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "propertyId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "employee", type: "address" },
+      { indexed: false, internalType: "string", name: "reason", type: "string" }
+    ],
+    name: "SaleRequestRejected",
+    type: "event"
+  },
   // ============ ADMIN FUNCTIONS ============
   {
     inputs: [],
@@ -282,6 +348,59 @@ export const TRANSFER_OWNERSHIP_ABI = [
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
+  },
+  // ============ EVENTS ============
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "address", name: "owner", type: "address" },
+      { indexed: true, internalType: "uint256", name: "propertyId", type: "uint256" },
+      { indexed: false, internalType: "uint256", name: "saleId", type: "uint256" }
+    ],
+    name: "PropertyOnSale",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: false, internalType: "uint256", name: "saleId", type: "uint256" },
+      { indexed: false, internalType: "address", name: "requestedUser", type: "address" },
+      { indexed: false, internalType: "uint256", name: "priceOffered", type: "uint256" }
+    ],
+    name: "PurchaseRequestSent",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: false, internalType: "uint256", name: "saleId", type: "uint256" },
+      { indexed: false, internalType: "address", name: "buyer", type: "address" },
+      { indexed: false, internalType: "uint256", name: "price", type: "uint256" },
+      { indexed: false, internalType: "uint256", name: "deadline", type: "uint256" }
+    ],
+    name: "SaleAccepted",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "saleId", type: "uint256" },
+      { indexed: true, internalType: "uint256", name: "propertyId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "newOwner", type: "address" },
+      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" }
+    ],
+    name: "OwnershipTransferred",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: false, internalType: "uint256", name: "saleId", type: "uint256" },
+      { indexed: false, internalType: "address", name: "buyer", type: "address" },
+      { indexed: false, internalType: "uint256", name: "priceOffered", type: "uint256" }
+    ],
+    name: "BuyerRequestRejected",
+    type: "event"
   },
   {
     inputs: [{ internalType: "uint256", name: "locationId", type: "uint256" }],

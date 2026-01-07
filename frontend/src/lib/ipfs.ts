@@ -11,6 +11,21 @@ export interface UploadResult {
     error?: string;
 }
 
+export interface PropertyMetadata {
+    name: string;
+    description: string;
+    image: string; // Cover photo IPFS URL
+    properties: {
+        deed: string; // Deed document IPFS URL
+        photos: string[]; // Additional photos
+        location?: {
+            lat: number;
+            lng: number;
+        };
+        owner?: string;
+    };
+}
+
 /**
  * Upload a file to IPFS via server-side API route (SECURE - recommended)
  * Falls back to direct Pinata upload if server route fails
@@ -48,6 +63,18 @@ export async function uploadToIPFS(file: File): Promise<UploadResult> {
 }
 
 /**
+ * Upload JSON Metadata to IPFS
+ * @param metadata - The metadata object
+ */
+export async function uploadMetadata(metadata: PropertyMetadata): Promise<UploadResult> {
+    // Convert to File object for upload logic reuse
+    const blob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
+    const file = new File([blob], "metadata.json", { type: 'application/json' });
+
+    return uploadToIPFS(file);
+}
+
+/**
  * Legacy upload method - uses NEXT_PUBLIC_ keys (exposed to browser)
  * Only use if server-side route is not configured
  */
@@ -69,7 +96,7 @@ async function uploadToIPFSLegacy(file: File): Promise<UploadResult> {
             name: file.name,
             keyvalues: {
                 uploadedAt: new Date().toISOString(),
-                type: 'land-deed-document'
+                type: file.type === 'application/json' ? 'metadata' : 'land-document'
             }
         });
         formData.append('pinataMetadata', metadata);
@@ -117,11 +144,33 @@ async function uploadToIPFSLegacy(file: File): Promise<UploadResult> {
  * @param cid - The IPFS Content Identifier
  * @returns The gateway URL
  */
-export function getIPFSUrl(cid: string): string {
+export function getIPFSUrl(cid: string, gateway: string = "https://gateway.pinata.cloud/ipfs/"): string {
+    if (!cid) return "";
     // Strip ipfs:// prefix if present
     const cleanCid = cid.replace('ipfs://', '');
-    // Use Pinata's dedicated gateway for better reliability
-    return `https://gateway.pinata.cloud/ipfs/${cleanCid}`;
+    return `${gateway}${cleanCid}`;
+}
+
+/**
+ * Resolve IPFS Hash - Checks if it's metadata or direct file
+ * @param cid - The IPFS Content Identifier
+ */
+export async function resolveIPFS(cid: string): Promise<{ isMetadata: boolean, data: any }> {
+    try {
+        const url = getIPFSUrl(cid);
+        const response = await fetch(url);
+        const contentType = response.headers.get("content-type");
+
+        if (contentType && contentType.includes("application/json")) {
+            const data = await response.json();
+            return { isMetadata: true, data };
+        } else {
+            return { isMetadata: false, data: url };
+        }
+    } catch (e) {
+        console.error("Error resolving IPFS:", e);
+        return { isMetadata: false, data: getIPFSUrl(cid) };
+    }
 }
 
 /**

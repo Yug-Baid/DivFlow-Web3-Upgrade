@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useReadContracts } from "wagmi";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useReadContracts, usePublicClient } from "wagmi";
 import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI, USERS_ADDRESS, USERS_ABI } from "@/lib/contracts";
 import dynamic from 'next/dynamic';
 import { formatEther } from "viem";
@@ -10,7 +10,8 @@ import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
-import { Wallet, Tag, Check, AlertCircle, X, AlertTriangle } from "lucide-react";
+import { Wallet, Tag, Check, AlertCircle, X, AlertTriangle, Info, History, ExternalLink } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
 
 // Admin address for role detection
@@ -19,7 +20,9 @@ const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 export default function MySales() {
     const router = useRouter();
     const { address, isConnected } = useAccount();
+    const publicClient = usePublicClient();
     const [mounted, setMounted] = useState(false);
+    const [saleTxHashes, setSaleTxHashes] = useState<Record<string, string>>({});
 
     useEffect(() => {
         setMounted(true);
@@ -72,18 +75,62 @@ export default function MySales() {
         functionName: "getAllSales",
     });
 
-    const mySales = (allSales as any[])?.filter(
-        (sale: any) => address && sale.owner.toLowerCase() === address.toLowerCase()
-    );
+    // Fix: Memoize `mySales` to prevent infinite re-renders in useEffect
+    const mySales = useMemo(() => {
+        return (allSales as any[])?.filter(
+            (sale: any) => address && sale.owner.toLowerCase() === address.toLowerCase()
+        ) || [];
+    }, [allSales, address]);
+
+    // Fetch tx hashes for sold properties
+    useEffect(() => {
+        if (!publicClient || !mySales || mySales.length === 0) return;
+
+        const fetchHashes = async () => {
+            const hashes: Record<string, string> = {};
+            // Filter for sold items (state === 3)
+            const soldItems = mySales.filter((s: any) => Number(s.state) === 3);
+
+            if (soldItems.length === 0) return;
+
+            // Only fetch if we don't have it yet to save RPC calls
+            const itemsToFetch = soldItems.filter((s: any) => !saleTxHashes[s.saleId.toString()]);
+            if (itemsToFetch.length === 0) return;
+
+            await Promise.all(itemsToFetch.map(async (sale: any) => {
+                try {
+                    const logs = await publicClient.getContractEvents({
+                        address: TRANSFER_OWNERSHIP_ADDRESS,
+                        abi: TRANSFER_OWNERSHIP_ABI,
+                        eventName: 'OwnershipTransferred',
+                        args: { saleId: sale.saleId },
+                        fromBlock: 'earliest'
+                    });
+                    if (logs.length > 0) {
+                        hashes[sale.saleId.toString()] = logs[0].transactionHash;
+                    }
+                } catch (e) {
+                    console.error("Error fetching logs for sale", sale.saleId, e);
+                }
+            }));
+
+            if (Object.keys(hashes).length > 0) {
+                setSaleTxHashes(prev => ({ ...prev, ...hashes }));
+            }
+        };
+
+        fetchHashes();
+    }, [publicClient, mySales]); // mySales is now stable thanks to useMemo
+
 
     // ISSUE-USER-REPORT: Fetch property details to check approval status
     const { data: propertyResults, isLoading: isLoadingProperties } = useReadContracts({
-        contracts: mySales?.map((sale: any) => ({
+        contracts: mySales.map((sale: any) => ({
             address: LAND_REGISTRY_ADDRESS as `0x${string}`,
             abi: LAND_REGISTRY_ABI,
             functionName: "getPropertyDetails",
             args: [sale.propertyId],
-        })) || [],
+        })),
     });
 
     if (!mounted) return null;
@@ -140,57 +187,114 @@ export default function MySales() {
             {isLoadingData ? (
                 <div className="text-center py-10 text-muted-foreground animate-pulse">Loading sales...</div>
             ) : (
-                <div className="space-y-6">
-                    {(() => {
-                        // Filter sales to show ONLY those with propertyState === 4 (OnSale) as per user request
-                        // We map first to attach the propertyState, then filter
-                        const filteredSales = mySales?.map((sale: any, index: number) => {
-                            const propertyResult = propertyResults?.[index];
-                            const propertyState = propertyResult?.status === 'success' ? (propertyResult.result as any).state : null;
-                            return { ...sale, propertyState };
-                        }).filter(item => item.propertyState !== null && Number(item.propertyState) === 4);
+                <Tabs defaultValue="active" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 mb-8">
+                        <TabsTrigger value="active">Active Listings</TabsTrigger>
+                        <TabsTrigger value="history">Sales History</TabsTrigger>
+                    </TabsList>
 
-                        if (!filteredSales || filteredSales.length === 0) {
+                    <TabsContent value="active" className="space-y-6">
+                        {(() => {
+                            // Filter for Active Listings
+                            // FIX: STRICTLY filter out sold (3) or cancelled (2) sales.
+                            // Only show Active (0) or AcceptedToBuyer (1).
+                            const filteredSales = mySales.map((sale: any, index: number) => {
+                                const propertyResult = propertyResults?.[index];
+                                const propertyState = propertyResult?.status === 'success' ? (propertyResult.result as any).state : null;
+                                const propertyOwner = propertyResult?.status === 'success' ? (propertyResult.result as any).owner : null;
+                                return { ...sale, propertyState, propertyOwner };
+                            }).filter(item => {
+                                // Must be Active (0) or Accepted (1).
+                                // Even if propertyState is 4 (OnSale), if 'this' sale is sold (3), it's history.
+                                const saleState = Number(item.state);
+                                const isStateActive = saleState === 0 || saleState === 1;
+
+                                // FIX: Must also be the CURRENT owner of the property.
+                                // If I sold it (via another sale or transfer), I am no longer the owner.
+                                // My old sale request is effectively invalid/stale.
+                                const isCurrentOwner = item.propertyOwner && address && item.propertyOwner.toLowerCase() === address.toLowerCase();
+
+                                return isStateActive && isCurrentOwner;
+                            });
+
+                            // Deduplicate properties (if somehow multiple active sales exist for same property - shouldn't happen but good safety)
+                            const uniqueSales = new Map();
+                            filteredSales.forEach((sale: any) => {
+                                const existing = uniqueSales.get(sale.propertyId.toString());
+                                if (!existing || sale.saleId > existing.saleId) {
+                                    uniqueSales.set(sale.propertyId.toString(), sale);
+                                }
+                            });
+                            const finalSales = Array.from(uniqueSales.values());
+
+                            if (!finalSales || finalSales.length === 0) {
+                                return (
+                                    <GlassCard className="text-center py-20">
+                                        <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Tag className="w-8 h-8 text-muted-foreground" />
+                                        </div>
+                                        <h3 className="text-lg font-medium text-foreground">No Active Listed Sales</h3>
+                                        <p className="text-muted-foreground mt-2 mb-6">You don't have any properties currently listed on the marketplace.</p>
+                                        <Link href="/track">
+                                            <Button variant="hero">Check Status in Track</Button>
+                                        </Link>
+                                    </GlassCard>
+                                );
+                            }
+
                             return (
-                                <GlassCard className="text-center py-20">
-                                    <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <Tag className="w-8 h-8 text-muted-foreground" />
-                                    </div>
-                                    <h3 className="text-lg font-medium text-foreground">No Active Listed Sales</h3>
-                                    <p className="text-muted-foreground mt-2 mb-6">You don't have any properties currently listed on the marketplace.</p>
-                                    <Link href="/track">
-                                        <Button variant="hero">Check Status in Track</Button>
-                                    </Link>
-                                </GlassCard>
+                                <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
+                                    {finalSales.map((sale: any) => (
+                                        <motion.div key={sale.saleId.toString()} variants={itemVariants}>
+                                            <SaleItem sale={sale} propertyState={sale.propertyState} onUpdate={refetchAllSales} />
+                                        </motion.div>
+                                    ))}
+                                </motion.div>
                             );
-                        }
+                        })()}
+                    </TabsContent>
 
-                        return (
-                            <motion.div
-                                variants={containerVariants}
-                                initial="hidden"
-                                animate="visible"
-                                className="space-y-6"
-                            >
-                                {filteredSales.map((sale: any) => (
-                                    <motion.div key={sale.saleId.toString()} variants={itemVariants}>
-                                        <SaleItem
-                                            sale={sale}
-                                            propertyState={sale.propertyState}
-                                            onUpdate={refetchAllSales}
-                                        />
-                                    </motion.div>
-                                ))}
-                            </motion.div>
-                        );
-                    })()}
-                </div>
+                    <TabsContent value="history" className="space-y-6">
+                        {(() => {
+                            // Filter for History (state === 3 [Success] or 2 [Closed/Cancelled])
+                            const historySales = mySales.filter(sale => Number(sale.state) === 3 || Number(sale.state) === 2);
+
+                            if (!historySales || historySales.length === 0) {
+                                return (
+                                    <GlassCard className="text-center py-20">
+                                        <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <History className="w-8 h-8 text-muted-foreground" />
+                                        </div>
+                                        <h3 className="text-lg font-medium text-foreground">No Past Sales</h3>
+                                        <p className="text-muted-foreground mt-2">You haven't sold any properties yet.</p>
+                                    </GlassCard>
+                                );
+                            }
+
+                            return (
+                                <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
+                                    {historySales.map((sale: any) => (
+                                        <motion.div key={sale.saleId.toString()} variants={itemVariants}>
+                                            <SaleItem
+                                                sale={sale}
+                                                propertyState={5} // Bought
+                                                onUpdate={refetchAllSales}
+                                                isHistory
+                                                txHash={saleTxHashes[sale.saleId.toString()]}
+                                            />
+                                        </motion.div>
+                                    ))}
+                                </motion.div>
+                            );
+                        })()}
+                    </TabsContent>
+                </Tabs>
             )}
         </DashboardLayout>
     );
 }
 
-function SaleItem({ sale, propertyState, onUpdate }: { sale: any, propertyState?: number | null, onUpdate?: () => void }) {
+function SaleItem({ sale, propertyState, onUpdate, isHistory, txHash }: { sale: any, propertyState?: number | null, onUpdate?: () => void, isHistory?: boolean, txHash?: string }) {
     const { data: requests, isLoading: isLoadingRequests, refetch } = useReadContract({
         address: TRANSFER_OWNERSHIP_ADDRESS,
         abi: TRANSFER_OWNERSHIP_ABI,
@@ -302,8 +406,9 @@ function SaleItem({ sale, propertyState, onUpdate }: { sale: any, propertyState?
     // ISSUE-USER-REPORT: Determine status label based on Property State
     // Property States: 0=Created, 2=Verified, 3=Rejected, 4=OnSale, 5=Bought, 6=SalePending
     const getStatusLabel = () => {
+        if (Number(sale.state) === 3) return 'Sold'; // Explicitly check Sale State first!
         if (sale.state === 1) return 'Accepted'; // Sale Contract: Accepted
-        if (sale.state === 2) return 'Closed';   // Sale Contract: Closed (Paid)
+        if (sale.state === 2) return 'Closed';   // Sale Contract: Closed (Paid) / Cancelled
 
         // Property state check for active sales (sale.state === 0)
         if (propertyState === 6) return 'Pending Approval'; // Waiting for Revenue
@@ -325,7 +430,7 @@ function SaleItem({ sale, propertyState, onUpdate }: { sale: any, propertyState?
                             ? 'bg-orange-500/10 text-orange-500 border-orange-500/20'
                             : statusLabel === 'Listed' || statusLabel === 'Active'
                                 ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-                                : statusLabel === 'Accepted'
+                                : statusLabel === 'Accepted' || statusLabel === 'Sold'
                                     ? 'bg-green-500/10 text-green-500 border-green-500/20'
                                     : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
                             }`}>
@@ -377,18 +482,42 @@ function SaleItem({ sale, propertyState, onUpdate }: { sale: any, propertyState?
 
             {/* Show completion info when sale succeeded (state === 3) */}
             {sale.state === 3 && (
-                <div className="p-4 bg-secondary/30 border-b border-border/50">
-                    <div className="flex items-center gap-2 text-sm">
-                        <Check className="w-4 h-4 text-green-500" />
-                        <span className="text-muted-foreground">Sold to</span>
-                        <span className="font-mono text-foreground">
-                            {sale.acceptedFor?.slice(0, 8)}...{sale.acceptedFor?.slice(-6)}
-                        </span>
-                        <span className="text-muted-foreground">for</span>
-                        <span className="font-mono text-green-400 font-bold">
-                            {formatEther(sale.acceptedPrice)} ETH
-                        </span>
+                <div className="p-4 bg-secondary/30 border-b border-border/50 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex flex-col gap-1 w-full md:w-auto">
+                        <div className="flex items-center gap-2 text-sm overflow-hidden">
+                            <Check className="w-4 h-4 text-green-500 shrink-0" />
+                            <span className="text-muted-foreground whitespace-nowrap">Sold to</span>
+                            <span className="font-mono text-foreground font-bold break-all">
+                                {sale.acceptedFor}
+                            </span>
+                            <span className="text-muted-foreground whitespace-nowrap">for</span>
+                            <span className="font-mono text-green-400 font-bold whitespace-nowrap">
+                                {formatEther(sale.acceptedPrice)} ETH
+                            </span>
+                        </div>
+                        {/* Transaction Hash Display */}
+                        {txHash && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground ml-6">
+                                <span>Transaction Hash:</span>
+                                <span className="font-mono text-foreground/70 break-all">{txHash}</span>
+                            </div>
+                        )}
                     </div>
+                    {/* View Button Logic: Use passed txHash if available, else link to address (fallback) */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            if (txHash) {
+                                window.open(`https://sepolia.etherscan.io/tx/${txHash}`, '_blank');
+                            } else {
+                                window.open(`https://sepolia.etherscan.io/address/${sale.acceptedFor}`, '_blank');
+                            }
+                        }}
+                        className="h-8 text-xs shrink-0 ml-auto md:ml-0"
+                    >
+                        View <ExternalLink className="w-3 h-3 ml-2" />
+                    </Button>
                 </div>
             )}
 
@@ -420,6 +549,9 @@ function SaleItem({ sale, propertyState, onUpdate }: { sale: any, propertyState?
                                             <span className="text-muted-foreground mr-2">Offer:</span>
                                             <span className="font-mono text-primary font-bold">{formatEther(req.priceOffered)} ETH</span>
                                             {idx === 0 && <span className="ml-2 text-xs bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded">Highest</span>}
+                                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-2" title={req.user}>
+                                                <Info className="w-3 h-3 text-muted-foreground" />
+                                            </Button>
                                         </p>
                                     </div>
 

@@ -1,13 +1,12 @@
 import { cn } from "@/lib/utils";
-import { ReactNode } from "react";
+import { ReactNode, HTMLAttributes } from "react";
 
-interface GlassCardProps {
+interface GlassCardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
-  className?: string;
   hover?: boolean;
 }
 
-export const GlassCard = ({ children, className, hover = false }: GlassCardProps) => {
+export const GlassCard = ({ children, className, hover = false, ...props }: GlassCardProps) => {
   return (
     <div
       className={cn(
@@ -15,6 +14,7 @@ export const GlassCard = ({ children, className, hover = false }: GlassCardProps
         hover && "hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10",
         className
       )}
+      {...props}
     >
       {children}
     </div>
