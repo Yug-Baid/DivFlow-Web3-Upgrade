@@ -133,6 +133,16 @@ export default function MySales() {
         })),
     });
 
+    // ISSUE-USER-REPORT: Fetch property details to check approval status
+    const { data: propertyResults, isLoading: isLoadingProperties } = useReadContracts({
+        contracts: mySales?.map((sale: any) => ({
+            address: LAND_REGISTRY_ADDRESS as `0x${string}`,
+            abi: LAND_REGISTRY_ABI,
+            functionName: "getPropertyDetails",
+            args: [sale.propertyId],
+        })) || [],
+    });
+
     if (!mounted) return null;
 
     // ISSUE-2: Show loading while checking registration
