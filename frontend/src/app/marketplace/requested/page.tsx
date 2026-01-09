@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
+import { EthPriceDisplay } from "@/components/shared/EthPriceDisplay";
 import { Clock, CheckCircle, XCircle, ShoppingBag, ArrowRight, Loader2, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -279,10 +280,15 @@ export default function RequestedSales() {
                                         </div>
                                     </div>
 
-                                    {/* Listed Price */}
-                                    <div className="flex justify-between items-center p-2 rounded bg-secondary/30 mb-3">
-                                        <span className="text-sm text-muted-foreground">Listed Price</span>
-                                        <span className="font-mono text-muted-foreground text-sm">{formatEther(sale.price)} ETH</span>
+                                    {/* Listed Price with INR */}
+                                    <div className="p-3 rounded-lg bg-secondary/30 border border-border/50 mb-3">
+                                        <p className="text-xs text-muted-foreground mb-1.5">Listed Price</p>
+                                        <EthPriceDisplay 
+                                            ethAmount={sale.price}
+                                            size="sm"
+                                            layout="inline"
+                                            emphasize="both"
+                                        />
                                     </div>
 
                                     {/* Show ALL of this user's bids */}
@@ -300,16 +306,19 @@ export default function RequestedSales() {
                                                     status.text === 'Declined' ? 'bg-red-500/5' :
                                                         'bg-secondary/20'
                                                     }`}>
-                                                    <div className="flex justify-between items-center">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-mono font-medium text-foreground">
-                                                                {formatEther(bid.priceOffered)} ETH
+                                                    <div className="space-y-2">
+                                                        <div className="flex justify-between items-center">
+                                                            <EthPriceDisplay 
+                                                                ethAmount={bid.priceOffered}
+                                                                size="sm"
+                                                                layout="inline"
+                                                                emphasize="both"
+                                                            />
+                                                            <span className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${status.color}`}>
+                                                                <StatusIcon className="w-3 h-3" />
+                                                                {status.text}
                                                             </span>
                                                         </div>
-                                                        <span className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${status.color}`}>
-                                                            <StatusIcon className="w-3 h-3" />
-                                                            {status.text}
-                                                        </span>
                                                     </div>
 
                                                     {/* Pay button only for the ACCEPTED bid */}

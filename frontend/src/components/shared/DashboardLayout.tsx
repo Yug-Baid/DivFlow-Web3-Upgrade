@@ -19,6 +19,8 @@ import {
   Search,
   Eye,
   Users,
+  DollarSign,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WalletConnect } from '@/components/WalletConnect';
@@ -34,11 +36,13 @@ interface DashboardLayoutProps {
 // CITIZEN Navigation - for regular users (not staff)
 const citizenNavItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Price Checker", href: "/price-checker", icon: DollarSign },
   { label: "Marketplace", href: "/marketplace", icon: Store },
   { label: "My Sales", href: "/marketplace/my-sales", icon: FileText },
   { label: "My Requests", href: "/marketplace/requested", icon: ShoppingBag },
   { label: "Register Land", href: "/register-land", icon: PlusCircle },
   { label: "Track Requests", href: "/track", icon: Eye },
+  { label: "Global Chat", href: "/chat", icon: MessageSquare },
 ];
 
 // STAFF Navigation - role-specific pages only
@@ -47,12 +51,15 @@ const staffNavItems = {
     { label: "Admin Panel", href: "/admin", icon: Shield },
     { label: "Land Inspector View", href: "/inspector", icon: Search },
     { label: "Revenue View", href: "/revenue", icon: Building2 },
+    { label: "Global Chat", href: "/chat", icon: MessageSquare },
   ],
   inspector: [
     { label: "Inspector Portal", href: "/inspector", icon: Search },
+    { label: "Global Chat", href: "/chat", icon: MessageSquare },
   ],
   revenue: [
     { label: "Revenue Portal", href: "/revenue", icon: Building2 },
+    { label: "Global Chat", href: "/chat", icon: MessageSquare },
   ],
 };
 

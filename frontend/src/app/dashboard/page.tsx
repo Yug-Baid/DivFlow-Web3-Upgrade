@@ -10,6 +10,8 @@ import SellPropertyModal from "@/components/SellPropertyModal";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
+import { EthPriceConverter } from "@/components/shared/EthPriceConverter";
+import { BalanceDisplay } from "@/components/shared/EthPriceDisplay";
 import { Plus, Store, FileText, MapPin, TrendingUp, Clock, ArrowUpRight, AlertTriangle, ShieldX } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -172,12 +174,19 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">
-          Welcome back, <span className="text-gradient hover:text-primary transition-colors cursor-default">User</span>
-        </h1>
-        <p className="text-muted-foreground">
-          Here's an overview of your property portfolio
-        </p>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">
+              Welcome back, <span className="text-gradient hover:text-primary transition-colors cursor-default">User</span>
+            </h1>
+            <p className="text-muted-foreground">
+              Here's an overview of your property portfolio
+            </p>
+          </div>
+          
+          {/* ETH Price Converter - Compact View */}
+          <EthPriceConverter compact showConverter={false} className="md:min-w-[280px]" />
+        </div>
       </div>
 
       {/* Stats Keys */}
@@ -193,9 +202,16 @@ export default function Dashboard() {
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
                 <stat.icon className="w-6 h-6 text-primary" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-sm text-muted-foreground">{stat.label}</p>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                {stat.label === "Total Value" && balance ? (
+                  <BalanceDisplay 
+                    ethBalance={Number(balance.formatted)} 
+                    symbol={balance.symbol}
+                  />
+                ) : (
+                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                )}
               </div>
             </GlassCard>
           </motion.div>
