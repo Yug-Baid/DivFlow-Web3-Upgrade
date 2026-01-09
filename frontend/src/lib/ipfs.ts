@@ -21,6 +21,7 @@ export interface PropertyMetadata {
         location?: {
             lat: number;
             lng: number;
+            address?: string; // Property address from geocoding
         };
         owner?: string;
     };

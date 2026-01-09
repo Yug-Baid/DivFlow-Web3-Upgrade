@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MapPin, Building, Ruler, Hash, ArrowLeft, Upload, AlertTriangle, FileText, Loader2, Cloud, ShieldX, Image as ImageIcon, Plus } from "lucide-react";
 import { uploadToIPFS, uploadMetadata, isPinataConfigured, PropertyMetadata } from "@/lib/ipfs";
-import DynamicMap from "@/components/shared/DynamicMap";
+import { PropertyLocationPicker } from "@/components/PropertyLocationPicker";
 
 // Admin address for role detection
 const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -30,6 +30,7 @@ export default function RegisterLand() {
     revenueDeptId: "",
     surveyNumber: "",
     area: "",
+    addressLine: "", // NEW: Address from geocoding
     lat: 20.5937, // Default center
     lng: 78.9629,
   });
@@ -91,6 +92,7 @@ export default function RegisterLand() {
         revenueDeptId: "",
         surveyNumber: "",
         area: "",
+        addressLine: "",
         lat: 20.5937, // Default center
         lng: 78.9629,
       });
@@ -141,26 +143,27 @@ export default function RegisterLand() {
 
   const publicClient = usePublicClient();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleLocationSelect = (lat: number, lng: number) => {
-    // AUTO-ID GENERATION (MOCK LOGIC)
-    // In a real app, this would query a GIS backend to get the administrative boundaries.
-    // Here we simulate it based on coordinate ranges or simple hashing for demo purposes.
+  // NEW: Handle location select from PropertyLocationPicker
+  const handleLocationSelect = (data: { lat: number; lng: number; address: string; formatted?: string }) => {
+    const { lat, lng, address, formatted } = data;
 
+    // AUTO-ID GENERATION (MOCK LOGIC)
     // Simulate "Region Code" (Location ID) based on latitude integer
     const mockLocationId = Math.floor(lat * 1000).toString().slice(0, 6);
 
     // Simulate "Revenue Dept ID" based on longitude integer
     const mockRevenueId = Math.floor(lng * 10).toString().slice(0, 3);
 
-    // Auto-fill the form
+    // Auto-fill the form with location data AND address
     setFormData(prev => ({
       ...prev,
       lat,
       lng,
+      addressLine: address || formatted || '',
       locationId: mockLocationId,
       revenueDeptId: mockRevenueId
     }));
@@ -254,7 +257,8 @@ export default function RegisterLand() {
           photos: photoCids.map(cid => `ipfs://${cid}`),
           location: {
             lat: formData.lat,
-            lng: formData.lng
+            lng: formData.lng,
+            address: formData.addressLine
           },
           owner: address
         }
@@ -412,21 +416,39 @@ export default function RegisterLand() {
               </div>
             </div>
 
-            {/* Section 2: Map Location */}
+            {/* Section 2: Map Location with Address Autocomplete */}
+            <PropertyLocationPicker
+              onLocationSelect={handleLocationSelect}
+              initialPosition={[formData.lat, formData.lng]}
+              initialAddress={formData.addressLine}
+              height="450px"
+            />
+
+            {/* Address Line Field - Auto-filled from map */}
             <div className="space-y-2">
-              <Label>Property Location on Map</Label>
-              <p className="text-xs text-muted-foreground mb-2">Click on the map to pin the exact location of the property.</p>
-              <div className="border border-border rounded-lg overflow-hidden shadow-inner">
-                <DynamicMap
-                  onLocationSelect={handleLocationSelect}
-                  initialLat={formData.lat}
-                  initialLng={formData.lng}
+              <Label htmlFor="addressLine">
+                Property Address
+                {formData.addressLine && <span className="text-green-500 text-xs ml-2">✓ Auto-filled from map</span>}
+              </Label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                <textarea
+                  id="addressLine"
+                  name="addressLine"
+                  value={formData.addressLine}
+                  onChange={handleChange}
+                  className="w-full rounded-md border bg-background px-3 py-2 pl-10 text-sm min-h-[80px] resize-y"
+                  placeholder="Click on the map above to auto-fill the address, or type manually..."
                 />
               </div>
-              <div className="flex gap-4 text-xs font-mono text-muted-foreground bg-secondary/30 p-2 rounded">
-                <span>Lat: {formData.lat.toFixed(6)}</span>
-                <span>Lng: {formData.lng.toFixed(6)}</span>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                ✏️ You can edit the address after it's auto-filled from the map.
+              </p>
+              {formData.lat && formData.lng && (
+                <div className="flex gap-4 text-xs font-mono text-muted-foreground bg-secondary/30 p-2 rounded mt-2">
+                  <span>📍 Coordinates: {formData.lat.toFixed(6)}, {formData.lng.toFixed(6)}</span>
+                </div>
+              )}
             </div>
 
             {/* Section 3: Documents & Photos */}

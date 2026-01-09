@@ -11,6 +11,8 @@ import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EthPriceConverter } from "@/components/shared/EthPriceConverter";
+import { EthPriceDisplay } from "@/components/shared/EthPriceDisplay";
 import { MapPin, Tag, ShoppingCart, Loader2, Info, AlertTriangle, ImageOff, Search, ArrowLeft, ArrowRight, Filter } from "lucide-react";
 import { motion } from "framer-motion";
 import { resolveIPFS, getIPFSUrl, PropertyMetadata } from "@/lib/ipfs";
@@ -250,10 +252,17 @@ export default function Marketplace() {
   return (
     <DashboardLayout>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">
-          Land <span className="text-gradient">Marketplace</span>
-        </h1>
-        <p className="text-muted-foreground">Find your dream land plot from verified listings.</p>
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">
+              Land <span className="text-gradient">Marketplace</span>
+            </h1>
+            <p className="textmuted-foreground">Find your dream land plot from verified listings.</p>
+          </div>
+          
+          {/* ETH Price - Compact View */}
+          <EthPriceConverter compact showConverter={false} />
+        </div>
       </div>
 
       {/* Controls Bar */}
@@ -345,10 +354,21 @@ export default function Marketplace() {
                     {/* Content Section */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-start">
-                        <div>
+                        <div className="flex-1">
                           <h3 className="font-bold text-lg text-foreground truncate">{getMockName(item)}</h3>
                           <p className="text-xs text-muted-foreground">Property ID: {item.property.propertyId.toString()}</p>
                         </div>
+                      </div>
+
+                      {/* Price Display with INR */}
+                      <div className="bg-primary/5 p-3 rounded-lg border border-primary/10">
+                        <p className="text-xs text-muted-foreground mb-1">Price</p>
+                        <EthPriceDisplay 
+                          ethAmount={item.sale.price}
+                          size="md"
+                          layout="stacked"
+                          emphasize="both"
+                        />
                       </div>
 
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">

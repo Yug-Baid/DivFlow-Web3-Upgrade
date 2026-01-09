@@ -11,9 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
-import { MapPin, CheckCircle, XCircle, Search, FileCheck, AlertTriangle, Eye, Info, FileText, Image as ImageIcon, History, ExternalLink } from "lucide-react";
+import { MapPin, CheckCircle, XCircle, Search, FileCheck, AlertTriangle, Eye, Info, FileText, Image as ImageIcon, History, ExternalLink, MessageCircle } from "lucide-react";
 import { UserInfoModal } from "@/components/UserInfoModal";
 import { resolveIPFS, getIPFSUrl, PropertyMetadata } from "@/lib/ipfs";
+import { IPFSChatModal } from "@/components/shared/IPFSChatModal";
 import dynamic from 'next/dynamic';
 
 const DynamicMap = dynamic(() => import('@/components/PropertyMap'), {
@@ -38,6 +39,7 @@ export default function InspectorDashboard() {
     const [resolvedMetadata, setResolvedMetadata] = useState<Record<string, PropertyMetadata | string>>({});
     const [historyLogs, setHistoryLogs] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    const [chatPropertyId, setChatPropertyId] = useState<string | null>(null);
 
     useEffect(() => {
         setIsMounted(true);
@@ -251,6 +253,9 @@ export default function InspectorDashboard() {
                             <span className="bg-primary text-primary-foreground text-[10px] px-1.5 rounded-full">{pendingProperties.length}</span>
                         )}
                     </TabsTrigger>
+                    <TabsTrigger value="verified" className="gap-2">
+                        <CheckCircle className="w-4 h-4" /> Verified Lands
+                    </TabsTrigger>
                     <TabsTrigger value="history" className="gap-2">
                         <History className="w-4 h-4" /> My Action History
                     </TabsTrigger>
@@ -378,6 +383,13 @@ export default function InspectorDashboard() {
                                                             {isConfirming ? "Verifying..." : "Verify"}
                                                         </Button>
                                                         <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setChatPropertyId(property.propertyId.toString())}
+                                                        >
+                                                            <MessageCircle className="w-4 h-4" />
+                                                        </Button>
+                                                        <Button
                                                             variant="destructive"
                                                             className="flex-1"
                                                             size="sm"
@@ -401,6 +413,74 @@ export default function InspectorDashboard() {
                             })}
                         </motion.div>
                     )}
+                </TabsContent>
+
+                <TabsContent value="verified">
+                     {/* Filter for Verified (2) or Sale Pending (6) */}
+                     {(() => {
+                         const verifiedProps = (properties as any[])?.filter((p: any) => Number(p.state) === 2 || Number(p.state) === 6) || [];
+                         
+                         return verifiedProps.length === 0 ? (
+                            <GlassCard className="text-center py-16">
+                                <CheckCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                                <h3 className="text-lg font-medium">No Verified Properties</h3>
+                                <p className="text-muted-foreground">Properties you verify will appear here for ongoing monitoring.</p>
+                            </GlassCard>
+                         ) : (
+                            <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {verifiedProps.map((property: any) => {
+                                    const meta = getMetadata(property.ipfsHash);
+                                    const isSalePending = Number(property.state) === 6;
+
+                                    return (
+                                        <motion.div key={property.propertyId.toString()} variants={itemVariants}>
+                                            <GlassCard hover className="relative overflow-hidden flex flex-col h-full opacity-90 hover:opacity-100">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <h3 className="font-bold text-lg">Property #{property.propertyId.toString()}</h3>
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                                                        isSalePending ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 
+                                                        'bg-green-500/10 text-green-500 border-green-500/20'
+                                                    }`}>
+                                                        {isSalePending ? 'Sale Pending' : 'Verified'}
+                                                    </span>
+                                                </div>
+
+                                                <div className="space-y-3 flex-grow mb-6">
+                                                     <div className="grid grid-cols-2 gap-2 text-sm">
+                                                        <div className="bg-secondary/30 p-2 rounded">
+                                                            <span className="text-xs text-muted-foreground block">Survey No</span>
+                                                            <span className="font-mono">{property.surveyNumber.toString()}</span>
+                                                        </div>
+                                                        <div className="bg-secondary/30 p-2 rounded">
+                                                            <span className="text-xs text-muted-foreground block">Area</span>
+                                                            <span className="font-mono">{property.area.toString()} sq.ft</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                     <div className="flex items-center justify-between p-2 bg-secondary/30 rounded text-sm">
+                                                        <span className="text-muted-foreground">Owner</span>
+                                                        <span className="font-mono">{property.owner.slice(0, 6)}...</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Verified Actions: CHAT ONLY */}
+                                                <div className="space-y-2">
+                                                     <Button
+                                                        className="w-full"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setChatPropertyId(property.propertyId.toString())}
+                                                    >
+                                                        <MessageCircle className="w-4 h-4 mr-2" /> Open Chat (Revenue)
+                                                    </Button>
+                                                </div>
+                                            </GlassCard>
+                                        </motion.div>
+                                    );
+                                })}
+                            </motion.div>
+                         );
+                     })()}
                 </TabsContent>
 
                 <TabsContent value="history">
@@ -454,6 +534,16 @@ export default function InspectorDashboard() {
                 onClose={() => setSelectedUserAddress(null)}
                 userAddress={selectedUserAddress || ""}
             />
+
+            {chatPropertyId && (
+                <IPFSChatModal
+                    propertyId={chatPropertyId}
+                    inspectorAddress={address || ""}
+                    revenueAddress={"0x0000000000000000000000000000000000000000"} // Placeholder, will be resolved by context or future update
+                    currentUserAddress={address || ""}
+                    onClose={() => setChatPropertyId(null)}
+                />
+            )}
         </DashboardLayout>
     );
 }

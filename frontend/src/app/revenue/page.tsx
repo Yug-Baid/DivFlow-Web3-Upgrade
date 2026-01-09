@@ -12,9 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
-import { Building, CheckCircle, Search, FileCheck, XCircle, Info, FileText, Image as ImageIcon, History, ExternalLink, Eye } from "lucide-react";
+import { Building, CheckCircle, Search, FileCheck, XCircle, Info, FileText, Image as ImageIcon, History, ExternalLink, Eye, MessageCircle } from "lucide-react";
 import { UserInfoModal } from "@/components/UserInfoModal";
 import { resolveIPFS, getIPFSUrl, PropertyMetadata } from "@/lib/ipfs";
+import { IPFSChatModal } from "@/components/shared/IPFSChatModal";
 import dynamic from 'next/dynamic';
 
 const DynamicMap = dynamic(() => import('@/components/PropertyMap'), {
@@ -39,6 +40,7 @@ export default function RevenueDashboard() {
   const [resolvedMetadata, setResolvedMetadata] = useState<Record<string, PropertyMetadata | string>>({});
   const [historyLogs, setHistoryLogs] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [chatPropertyId, setChatPropertyId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -93,10 +95,15 @@ export default function RevenueDashboard() {
   // Verified (2) -> Needs Revenue Logic? Or just SalePending (6)?
   // User reported "put a land for selling request", which is State 6.
   // We must show State 6.
+  // Filter Pending Properties
+  // State 0: Registered (Inspector needs to verify) -> Revenue can VIEW/CHAT
+  // State 1: Inspector Accepted? (Still pending verification) -> Revenue can VIEW/CHAT
+  // State 6: Sale Pending -> Revenue needs to APPROVE
   const pendingProperties = useMemo(() =>
-    (properties as any[])?.filter((p: any) =>
-      p.state === 6 // Sale Pending (High Priority for Revenue)
-    ) || [],
+    (properties as any[])?.filter((p: any) => {
+      const state = Number(p.state);
+      return state === 0 || state === 1 || state === 6;
+    }) || [],
     [properties]);
 
   // Resolve Metadata
@@ -305,8 +312,11 @@ export default function RevenueDashboard() {
                     <GlassCard hover className="relative overflow-hidden flex flex-col h-full">
                       <div className="flex justify-between items-start mb-4">
                         <h3 className="font-bold text-lg">Property #{property.propertyId.toString()}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${isSalePending ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>
-                          Status: {isSalePending ? 'Sale Pending' : 'Verified'}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                          isSalePending ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 
+                          'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                        }`}>
+                          Status: {isSalePending ? 'Sale Pending' : 'Verification Pending'}
                         </span>
                       </div>
 
@@ -404,35 +414,43 @@ export default function RevenueDashboard() {
                             </div>
                           </div>
                         ) : (
-                          <div className="flex gap-2">
-                            {isSalePending ? (
-                              <Button
-                                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                                size="sm"
-                                onClick={() => handleApprove(property.propertyId)}
-                                disabled={isConfirming}
-                              >
-                                {isConfirming ? "Approving..." : "Approve Sale"}
-                              </Button>
-                            ) : (
-                              <Button
-                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                                size="sm"
-                                onClick={() => handleVerify(property.propertyId)}
-                                disabled={isConfirming}
-                              >
-                                {isConfirming ? "Verifying..." : "Verify Property"}
-                              </Button>
-                            )}
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              {isSalePending ? (
+                                <>
+                                  <Button
+                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                    size="sm"
+                                    onClick={() => handleApprove(property.propertyId)}
+                                    disabled={isConfirming}
+                                  >
+                                    {isConfirming ? "Approving..." : "Approve Sale"}
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    className="flex-1"
+                                    size="sm"
+                                    onClick={() => setRejectPropertyId(property.propertyId)}
+                                    disabled={isConfirming}
+                                  >
+                                    Reject
+                                  </Button>
+                                </>
+                              ) : (
+                                <div className="flex-1 flex items-center justify-center p-2 bg-yellow-500/10 text-yellow-500 text-xs rounded border border-yellow-500/20">
+                                  <Info className="w-3 h-3 mr-2" />
+                                  Verification in Progress (Inspector)
+                                </div>
+                              )}
+                            </div>
 
                             <Button
-                              variant="destructive"
-                              className="flex-1"
+                              className="w-full"
+                              variant="outline"
                               size="sm"
-                              onClick={() => setRejectPropertyId(property.propertyId)}
-                              disabled={isConfirming}
+                              onClick={() => setChatPropertyId(property.propertyId.toString())}
                             >
-                              Reject
+                              <MessageCircle className="w-4 h-4 mr-2" /> Open Chat
                             </Button>
                           </div>
                         )
@@ -502,6 +520,16 @@ export default function RevenueDashboard() {
         onClose={() => setSelectedUserAddress(null)}
         userAddress={selectedUserAddress || ""}
       />
+      
+      {chatPropertyId && (
+        <IPFSChatModal
+          propertyId={chatPropertyId}
+          inspectorAddress={"0x0000000000000000000000000000000000000000"} // Placeholder
+          revenueAddress={address || ""}
+          currentUserAddress={address || ""}
+          onClose={() => setChatPropertyId(null)}
+        />
+      )}
     </DashboardLayout>
   );
 }

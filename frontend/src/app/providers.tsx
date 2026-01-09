@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, useEffect, type ReactNode } from 'react'
 import { WagmiProvider } from 'wagmi'
+import { IPFSProvider } from '@/contexts/IPFSContext'
 
 import { config } from '@/lib/config'
 
@@ -51,7 +52,9 @@ export function Providers(props: { children: ReactNode }) {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        {props.children}
+        <IPFSProvider>
+          {props.children}
+        </IPFSProvider>
       </QueryClientProvider>
     </WagmiProvider>
   )
