@@ -14,6 +14,7 @@ import { EthPriceConverter } from "@/components/shared/EthPriceConverter";
 import { BalanceDisplay } from "@/components/shared/EthPriceDisplay";
 import { Plus, Store, FileText, MapPin, TrendingUp, Clock, ArrowUpRight, AlertTriangle, ShieldX } from "lucide-react";
 import { motion } from "framer-motion";
+import { StaffRouteGuard } from "@/components/StaffRouteGuard";
 
 // Admin address for role detection
 const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -30,13 +31,26 @@ export default function Dashboard() {
     setIsMounted(true);
   }, []);
 
-  // Check if user is registered
-  const { data: isRegistered, isLoading: isCheckingRegistration } = useReadContract({
+  // Check if user is registered - with refetch capability
+  const { data: isRegistered, isLoading: isCheckingRegistration, refetch: refetchRegistration } = useReadContract({
     address: USERS_ADDRESS,
     abi: USERS_ABI,
     functionName: "isUserRegistered",
     args: address ? [address] : undefined,
+    query: {
+      // Always refetch on mount to get fresh data after registration
+      refetchOnMount: 'always',
+      staleTime: 0,
+    }
   });
+
+  // Refetch registration status when component mounts or address changes
+  useEffect(() => {
+    if (address) {
+      console.log('🔄 Dashboard: Refetching registration status for', address);
+      refetchRegistration();
+    }
+  }, [address, refetchRegistration]);
 
   // STAFF DETECTION: Check if user is a staff member
   const { data: inspectorLocation } = useReadContract({
@@ -60,8 +74,19 @@ export default function Dashboard() {
 
   // Redirect unregistered users to register page (only for non-staff)
   useEffect(() => {
+    console.log('📊 Dashboard State:', {
+      address,
+      isRegistered,
+      isCheckingRegistration,
+      isStaff
+    });
+    
+    // Only redirect if we've definitively confirmed the user is NOT registered
     if (!isCheckingRegistration && isRegistered === false && address && !isStaff) {
+      console.log('❌ User not registered, redirecting to /register');
       router.push('/register');
+    } else if (isRegistered === true) {
+      console.log('✅ User is registered!');
     }
   }, [isRegistered, isCheckingRegistration, address, router, isStaff]);
 
@@ -172,6 +197,7 @@ export default function Dashboard() {
   }
 
   return (
+    <StaffRouteGuard>
     <DashboardLayout>
       <div className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
@@ -292,6 +318,12 @@ export default function Dashboard() {
                   </div>
 
                   <div className="flex gap-2 mt-auto">
+                    {/* View Details Button */}
+                    <Link href={`/property/${property.propertyId.toString()}`} className="flex-1">
+                      <Button variant="outline" size="sm" className="w-full">
+                        View Details
+                      </Button>
+                    </Link>
                     {/* G1 FIX: Only show Sell button for Verified(2) or Bought(5) states */}
                     {/* Hide for OnSale(4) or SalePending(6) states */}
                     {(property.state === 2 || property.state === 5) && (
@@ -361,5 +393,6 @@ export default function Dashboard() {
         </>
       )}
     </DashboardLayout>
+  </StaffRouteGuard>
   );
 }

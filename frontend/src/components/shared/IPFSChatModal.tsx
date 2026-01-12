@@ -164,7 +164,7 @@ export function IPFSChatModal({
               </div>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => window.location.reload()} className="hover:bg-destructive/10 hover:text-destructive">
+          <Button variant="ghost" size="icon" onClick={onClose} className="hover:bg-destructive/10 hover:text-destructive">
             <X className="w-5 h-5" />
           </Button>
         </div>

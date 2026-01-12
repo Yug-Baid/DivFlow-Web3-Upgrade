@@ -16,6 +16,7 @@ import { EthPriceDisplay } from "@/components/shared/EthPriceDisplay";
 import { MapPin, Tag, ShoppingCart, Loader2, Info, AlertTriangle, ImageOff, Search, ArrowLeft, ArrowRight, Filter } from "lucide-react";
 import { motion } from "framer-motion";
 import { resolveIPFS, getIPFSUrl, PropertyMetadata } from "@/lib/ipfs";
+import { StaffRouteGuard } from "@/components/StaffRouteGuard";
 
 // Admin address for role detection
 const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -250,6 +251,7 @@ export default function Marketplace() {
   }
 
   return (
+    <StaffRouteGuard>
     <DashboardLayout>
       <div className="mb-8">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -420,5 +422,6 @@ export default function Marketplace() {
         </>
       )}
     </DashboardLayout>
+    </StaffRouteGuard>
   );
 }

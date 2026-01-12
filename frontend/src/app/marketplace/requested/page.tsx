@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { EthPriceDisplay } from "@/components/shared/EthPriceDisplay";
 import { Clock, CheckCircle, XCircle, ShoppingBag, ArrowRight, Loader2, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
+import { StaffRouteGuard } from "@/components/StaffRouteGuard";
 
 // Admin address for role detection
 const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -236,6 +237,7 @@ export default function RequestedSales() {
     }
 
     return (
+        <StaffRouteGuard>
         <DashboardLayout>
             <div className="mb-8 flex justify-between items-center">
                 <div>
@@ -385,5 +387,6 @@ export default function RequestedSales() {
                 </div>
             )}
         </DashboardLayout>
+    </StaffRouteGuard>
     );
 }

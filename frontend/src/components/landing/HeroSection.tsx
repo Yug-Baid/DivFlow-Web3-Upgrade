@@ -7,12 +7,18 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAccount, useReadContract } from "wagmi";
 import { USERS_ADDRESS, USERS_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+import { useState, useEffect } from "react";
 
 // Admin wallet address (Anvil account 0)
 const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
 export const HeroSection = () => {
   const { address, isConnected } = useAccount();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Check if user is registered
   const { data: isRegistered } = useReadContract({
@@ -47,10 +53,11 @@ export const HeroSection = () => {
   const isRevenueEmployee = employeeRevenueDeptId && (employeeRevenueDeptId as bigint) > BigInt(0);
   const isStaff = isAdmin || isLandInspector || isRevenueEmployee;
 
-  // Determine button text and destination - Staff gets "Launch App" even if not registered
-  const buttonText = isConnected && (isRegistered || isStaff) ? "Launch App" : "Get Started";
-  const buttonHref = isConnected && (isRegistered || isStaff) ? "/dashboard" : "/register";
-  const ButtonIcon = isConnected && (isRegistered || isStaff) ? Rocket : ArrowRight;
+  // Only compute dynamic values on client to prevent hydration mismatch
+  const showLaunchApp = isMounted && isConnected && (isRegistered || isStaff);
+  const buttonText = showLaunchApp ? "Launch App" : "Get Started";
+  const buttonHref = showLaunchApp ? "/dashboard" : "/register";
+  const ButtonIcon = showLaunchApp ? Rocket : ArrowRight;
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">

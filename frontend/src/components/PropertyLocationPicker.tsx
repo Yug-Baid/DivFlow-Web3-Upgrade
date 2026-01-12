@@ -150,26 +150,6 @@ export function PropertyLocationPicker({
           <MapPin className="w-4 h-4 text-primary" />
           Property Location
         </label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={getUserLocation}
-          disabled={loading}
-          className="text-xs"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-              Getting location...
-            </>
-          ) : (
-            <>
-              <Navigation className="w-3 h-3 mr-1" />
-              Use My Location
-            </>
-          )}
-        </Button>
       </div>
 
       <p className="text-xs text-muted-foreground">

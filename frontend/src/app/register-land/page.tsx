@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { MapPin, Building, Ruler, Hash, ArrowLeft, Upload, AlertTriangle, FileText, Loader2, Cloud, ShieldX, Image as ImageIcon, Plus } from "lucide-react";
 import { uploadToIPFS, uploadMetadata, isPinataConfigured, PropertyMetadata } from "@/lib/ipfs";
 import { PropertyLocationPicker } from "@/components/PropertyLocationPicker";
+import { StaffRouteGuard } from "@/components/StaffRouteGuard";
 
 // Admin address for role detection
 const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -26,6 +27,8 @@ export default function RegisterLand() {
   });
 
   const [formData, setFormData] = useState({
+    propertyName: "",
+    description: "",
     locationId: "",
     revenueDeptId: "",
     surveyNumber: "",
@@ -88,6 +91,8 @@ export default function RegisterLand() {
     if (isConfirmed) {
       // Reset form state for registering another property
       setFormData({
+        propertyName: "",
+        description: "",
         locationId: "",
         revenueDeptId: "",
         surveyNumber: "",
@@ -136,6 +141,7 @@ export default function RegisterLand() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [isEnhancingDescription, setIsEnhancingDescription] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -145,6 +151,42 @@ export default function RegisterLand() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // AI Description Enhancement Handler
+  const handleEnhanceDescription = async () => {
+    if (!formData.description.trim()) {
+      setSubmitError("Please enter a description first to enhance.");
+      return;
+    }
+
+    setIsEnhancingDescription(true);
+    setSubmitError(null);
+
+    try {
+      const response = await fetch('/api/enhance-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: formData.description,
+          propertyDetails: {
+            area: formData.area,
+            address: formData.addressLine
+          }
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        setFormData(prev => ({ ...prev, description: result.enhanced }));
+      } else {
+        setSubmitError(result.message || 'Failed to enhance description');
+      }
+    } catch (error: any) {
+      setSubmitError('Failed to connect to AI service');
+    } finally {
+      setIsEnhancingDescription(false);
+    }
   };
 
   // NEW: Handle location select from PropertyLocationPicker
@@ -249,8 +291,8 @@ export default function RegisterLand() {
 
       // 4. Construct Metadata
       const metadata: PropertyMetadata = {
-        name: `Property ${formData.surveyNumber}`,
-        description: `Land registered in Revenue Dept ${formData.revenueDeptId}, Survey No. ${formData.surveyNumber}`,
+        name: formData.propertyName || `Property ${formData.surveyNumber}`,
+        description: formData.description || `Land registered in Revenue Dept ${formData.revenueDeptId}, Survey No. ${formData.surveyNumber}`,
         image: `ipfs://${coverResult.cid}`,
         properties: {
           deed: `ipfs://${deedResult.cid}`,
@@ -351,6 +393,7 @@ export default function RegisterLand() {
   }
 
   return (
+    <StaffRouteGuard>
     <DashboardLayout>
       <div className="mb-4">
         <Link href="/dashboard" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm transition-colors">
@@ -368,6 +411,57 @@ export default function RegisterLand() {
           </div>
 
           <form onSubmit={uploadAndSubmit} className="space-y-8">
+
+            {/* Section 0: Property Name & Description */}
+            <div className="space-y-6 border-b border-border/50 pb-8">
+              <div className="space-y-2">
+                <Label htmlFor="propertyName">Property Name <span className="text-destructive">*</span></Label>
+                <Input 
+                  id="propertyName" 
+                  name="propertyName" 
+                  type="text" 
+                  required 
+                  className="bg-secondary/50 border-input" 
+                  value={formData.propertyName} 
+                  onChange={handleChange} 
+                  placeholder="e.g. Prime Agricultural Land in Kurnool"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="description">Description</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleEnhanceDescription}
+                    disabled={isEnhancingDescription || !formData.description.trim()}
+                    className="text-xs h-7"
+                  >
+                    {isEnhancingDescription ? (
+                      <>
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        Enhancing...
+                      </>
+                    ) : (
+                      <>✨ Enhance with AI</>
+                    )}
+                  </Button>
+                </div>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  className="w-full rounded-md border bg-secondary/50 px-3 py-2 text-sm min-h-[100px] resize-y"
+                  placeholder="Describe the property... (e.g. Fertile agricultural land with water access, suitable for farming)"
+                />
+                <p className="text-xs text-muted-foreground">
+                  💡 Tip: Write a basic description and click "Enhance with AI" to improve it!
+                </p>
+              </div>
+            </div>
 
             {/* Section 1: Property Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -569,5 +663,6 @@ export default function RegisterLand() {
         </GlassCard>
       </div>
     </DashboardLayout>
+    </StaffRouteGuard>
   );
 }
