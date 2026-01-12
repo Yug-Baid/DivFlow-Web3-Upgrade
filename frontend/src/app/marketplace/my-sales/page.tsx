@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Wallet, Tag, Check, AlertCircle, X, AlertTriangle, Info, History, ExternalLink } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
+import { StaffRouteGuard } from "@/components/StaffRouteGuard";
 
 // Admin address for role detection
 const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -180,6 +181,7 @@ export default function MySales() {
     const isLoadingData = isLoading || isLoadingProperties;
 
     return (
+        <StaffRouteGuard>
         <DashboardLayout>
             <div className="mb-8">
                 <h1 className="text-3xl font-bold text-foreground mb-2">My Sales</h1>
@@ -300,6 +302,7 @@ export default function MySales() {
                 </Tabs>
             )}
         </DashboardLayout>
+    </StaffRouteGuard>
     );
 }
 
