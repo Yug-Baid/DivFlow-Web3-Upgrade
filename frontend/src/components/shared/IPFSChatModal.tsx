@@ -17,10 +17,10 @@ interface IPFSChatModalProps {
 
 
 
-export function IPFSChatModal({ 
-  propertyId, 
-  inspectorAddress, 
-  revenueAddress, 
+export function IPFSChatModal({
+  propertyId,
+  inspectorAddress,
+  revenueAddress,
   currentUserAddress,
   onClose,
   isChatDisabled = false
@@ -40,10 +40,10 @@ export function IPFSChatModal({
       try {
         setStatus('connecting');
         database = await connectToChat(propertyId);
-        
+
         if (!mounted) return;
         setDb(database);
-        
+
         // Initial load
         await loadMessages(database);
         setStatus('synced');
@@ -61,7 +61,7 @@ export function IPFSChatModal({
         console.error('Failed to connect to chat DB:', err);
         // Only set error if we couldn't get the DB, otherwise keep retrying/connecting
         if (!database) {
-            setStatus('error');
+          setStatus('error');
         }
       }
     };
@@ -81,19 +81,19 @@ export function IPFSChatModal({
   useEffect(() => {
     const local = localStorage.getItem(`chat-${propertyId}`);
     if (local) {
-        try {
-            const parsed = JSON.parse(local);
-            setMessages(parsed);
-        } catch (e) {
-            console.error("Failed to load local chat:", e);
-        }
+      try {
+        const parsed = JSON.parse(local);
+        setMessages(parsed);
+      } catch (e) {
+        console.error("Failed to load local chat:", e);
+      }
     }
   }, [propertyId]);
 
   // Persist messages to local storage whenever they change
   useEffect(() => {
     if (messages.length > 0) {
-        localStorage.setItem(`chat-${propertyId}`, JSON.stringify(messages));
+      localStorage.setItem(`chat-${propertyId}`, JSON.stringify(messages));
     }
   }, [messages, propertyId]);
 
@@ -104,7 +104,7 @@ export function IPFSChatModal({
       for await (const doc of database.iterator({ limit: -1 })) {
         all.push(doc);
       }
-      
+
       // Map OrbitDB entries to ChatMessage
       const mapped = all.filter(item => {
         const content = item?.payload?.value || item?.value;
@@ -121,16 +121,16 @@ export function IPFSChatModal({
 
       // Merge with existing messages (deduplicate)
       setMessages(prev => {
-          const combined = new Map();
-          // Add previous messages first
-          prev.forEach(m => combined.set(m.hash || `${m.timestamp}-${m.sender}`, m));
-          // Add/Overwrite with network messages
-          mapped.forEach(m => combined.set(m.hash, m));
-          
-          return Array.from(combined.values()).sort((a, b) => a.timestamp - b.timestamp);
+        const combined = new Map();
+        // Add previous messages first
+        prev.forEach(m => combined.set(m.hash || `${m.timestamp}-${m.sender}`, m));
+        // Add/Overwrite with network messages
+        mapped.forEach(m => combined.set(m.hash, m));
+
+        return Array.from(combined.values()).sort((a, b) => a.timestamp - b.timestamp);
       });
 
-      scrollToBottom();
+
     } catch (e) {
       console.error('Error loading messages:', e);
     }
@@ -148,7 +148,7 @@ export function IPFSChatModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg bg-background/95 border border-border rounded-xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        
+
         {/* Header */}
         <div className="p-4 border-b border-border flex items-center justify-between bg-secondary/20">
           <div className="flex items-center gap-3">
@@ -159,8 +159,6 @@ export function IPFSChatModal({
               <h3 className="font-semibold text-sm">Property #{propertyId} Chat</h3>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className={`w-2 h-2 rounded-full ${status === 'synced' ? 'bg-green-500' : status === 'error' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`} />
-                {status === 'synced' ? 'P2P Synced' : status === 'error' ? 'Connection Failed' : 'Connecting...'}
-                {/* {peers > 0 && <span className="text-xs">({peers} peers)</span>} */}
               </div>
             </div>
           </div>
@@ -171,33 +169,33 @@ export function IPFSChatModal({
 
         {/* Content (Refactored to use ChatWindow) */}
         <div className="flex-1 flex flex-col min-h-0">
-            <ChatWindow 
-                messages={messages}
-                currentUserAddress={currentUserAddress}
-                partnerRole={partnerRole}
-                status={status}
-                error={ipfsError}
-                onSendMessage={async (text) => {
-                    if (!db) return;
-                    try {
-                        const msg = {
-                            sender: currentUserAddress,
-                            content: text,
-                            timestamp: Date.now()
-                        };
-                        await db.add(msg);
-                        await loadMessages(db);
-                    } catch (err: any) {
-                         // Fix for "NoPeers" warning
-                         if (err.message && err.message.includes('NoPeersSubscribedToTopic')) {
-                             // console.warn('Message saved locally (no peers subscribed yet):', err);
-                             await loadMessages(db);
-                             return;
-                         }
-                         throw err;
-                    }
-                }}
-            />
+          <ChatWindow
+            messages={messages}
+            currentUserAddress={currentUserAddress}
+            partnerRole={partnerRole}
+            status={status}
+            error={ipfsError}
+            onSendMessage={async (text) => {
+              if (!db) return;
+              try {
+                const msg = {
+                  sender: currentUserAddress,
+                  content: text,
+                  timestamp: Date.now()
+                };
+                await db.add(msg);
+                await loadMessages(db);
+              } catch (err: any) {
+                // Fix for "NoPeers" warning
+                if (err.message && err.message.includes('NoPeersSubscribedToTopic')) {
+                  // console.warn('Message saved locally (no peers subscribed yet):', err);
+                  await loadMessages(db);
+                  return;
+                }
+                throw err;
+              }
+            }}
+          />
         </div>
       </div>
     </div>

@@ -27,6 +27,19 @@ export interface PropertyMetadata {
     };
 }
 
+// User profile for staff visibility (stored in IPFS during registration)
+export interface UserProfile {
+    walletAddress: string;
+    firstName: string;
+    lastName: string;
+    pan: string;           // Full PAN for authorized staff viewing
+    panMasked: string;     // XXXXXX1234F
+    aadhaar: string;       // Full Aadhaar for authorized staff viewing
+    aadhaarMasked: string; // XXXX XXXX 1234
+    mobile: string;
+    registeredAt: number;  // Unix timestamp
+}
+
 /**
  * Upload a file to IPFS via server-side API route (SECURE - recommended)
  * Falls back to direct Pinata upload if server route fails
@@ -71,6 +84,17 @@ export async function uploadMetadata(metadata: PropertyMetadata): Promise<Upload
     // Convert to File object for upload logic reuse
     const blob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
     const file = new File([blob], "metadata.json", { type: 'application/json' });
+
+    return uploadToIPFS(file);
+}
+
+/**
+ * Upload User Profile to IPFS
+ * @param profile - The user profile object
+ */
+export async function uploadUserProfile(profile: UserProfile): Promise<UploadResult> {
+    const blob = new Blob([JSON.stringify(profile)], { type: 'application/json' });
+    const file = new File([blob], "user-profile.json", { type: 'application/json' });
 
     return uploadToIPFS(file);
 }

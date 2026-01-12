@@ -72,7 +72,7 @@ export default function RegisterUser() {
     aadhar: "",
     mobile: "",
   });
-  
+
   // Verification state
   const [demoMode, setDemoMode] = useState(true);
   const [verificationStep, setVerificationStep] = useState<VerificationStep>("form");
@@ -81,12 +81,12 @@ export default function RegisterUser() {
   const [otpValue, setOtpValue] = useState("");
   const [otpExpiresIn, setOtpExpiresIn] = useState(300);
   const [resendCooldown, setResendCooldown] = useState(0);
-  
+
   // Validation state
   const [aadhaarValidation, setAadhaarValidation] = useState<{ isValid: boolean; error?: string }>({ isValid: false });
   const [mobileValidation, setMobileValidation] = useState<{ isValid: boolean; error?: string }>({ isValid: false });
   const [panValidation, setPanValidation] = useState<{ isValid: boolean; error?: string; entityType?: string }>({ isValid: false });
-  
+
   // Error state
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
@@ -114,7 +114,7 @@ export default function RegisterUser() {
   const handleAadharChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 12);
     setFormData({ ...formData, aadhar: value });
-    
+
     if (value.length === 12) {
       const validation = validateAadhaar(value);
       setAadhaarValidation(validation);
@@ -127,7 +127,7 @@ export default function RegisterUser() {
   const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 10);
     setFormData({ ...formData, mobile: value });
-    
+
     if (value.length === 10) {
       const validation = validateMobile(value);
       setMobileValidation(validation);
@@ -140,7 +140,7 @@ export default function RegisterUser() {
   const handlePanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toUpperCase().slice(0, 10);
     setFormData({ ...formData, pan: value });
-    
+
     if (value.length === 10) {
       const validation = validatePAN(value);
       setPanValidation(validation);
@@ -157,7 +157,7 @@ export default function RegisterUser() {
     try {
       // DUPLICATE CHECK: Check if Aadhaar is already registered
       const aadharHash = keccak256(encodePacked(["string"], [formData.aadhar]));
-      
+
       const isAadharUsed = await publicClient?.readContract({
         address: USERS_ADDRESS,
         abi: USERS_ABI,
@@ -167,6 +167,22 @@ export default function RegisterUser() {
 
       if (isAadharUsed) {
         setSubmitError("This Aadhaar number is already registered. Each Aadhaar can only be used once.");
+        setVerificationStep("form");
+        return;
+      }
+
+      // DUPLICATE CHECK: Check if PAN is already registered
+      const panHash = keccak256(encodePacked(["string"], [formData.pan]));
+
+      const isPanUsed = await publicClient?.readContract({
+        address: USERS_ADDRESS,
+        abi: USERS_ABI,
+        functionName: "isPanRegistered",
+        args: [panHash],
+      });
+
+      if (isPanUsed) {
+        setSubmitError("This PAN card is already registered. Each PAN can only be used once.");
         setVerificationStep("form");
         return;
       }
@@ -207,7 +223,7 @@ export default function RegisterUser() {
   // Resend OTP
   const handleResendOTP = async () => {
     if (resendCooldown > 0) return;
-    
+
     setSubmitError(null);
     const otpResult = await sendOTP(formData.mobile, demoMode);
 
@@ -252,7 +268,6 @@ export default function RegisterUser() {
 
     try {
       // PRIVACY: Hash the identity data before sending to blockchain
-      // Includes: firstName, lastName, PAN, Aadhaar
       const identityHash = keccak256(
         encodePacked(
           ['string', 'string', 'string', 'string'],
@@ -260,8 +275,9 @@ export default function RegisterUser() {
         )
       );
       const aadharHash = keccak256(encodePacked(['string'], [formData.aadhar]));
+      const panHash = keccak256(encodePacked(['string'], [formData.pan]));
 
-      // PRE-CHECK: Check if Aadhaar is already registered (saves gas!)
+      // PRE-CHECK: Check if Aadhaar is already registered
       try {
         const isAadharTaken = await publicClient?.readContract({
           address: USERS_ADDRESS,
@@ -276,14 +292,53 @@ export default function RegisterUser() {
           return;
         }
       } catch (preCheckErr) {
-        console.warn("Pre-check failed, proceeding with transaction:", preCheckErr);
+        console.warn("Aadhaar pre-check failed, proceeding:", preCheckErr);
+      }
+
+      // PRE-CHECK: Check if PAN is already registered
+      try {
+        const isPanTaken = await publicClient?.readContract({
+          address: USERS_ADDRESS,
+          abi: USERS_ABI,
+          functionName: "isPanRegistered",
+          args: [panHash],
+        });
+
+        if (isPanTaken) {
+          setSubmitError("⚠️ This PAN card is already registered to another account.");
+          setIsChecking(false);
+          return;
+        }
+      } catch (preCheckErr) {
+        console.warn("PAN pre-check failed, proceeding:", preCheckErr);
+      }
+
+      // IPFS: Upload user profile for staff visibility
+      const { uploadUserProfile } = await import("@/lib/ipfs");
+      const userProfile = {
+        walletAddress: address,
+        firstName: formData.fname,
+        lastName: formData.lname,
+        pan: formData.pan,
+        panMasked: `XXXXXX${formData.pan.slice(-4)}`,
+        aadhaar: formData.aadhar,
+        aadhaarMasked: `XXXX XXXX ${formData.aadhar.slice(-4)}`,
+        mobile: formData.mobile,
+        registeredAt: Date.now(),
+      };
+
+      const uploadResult = await uploadUserProfile(userProfile);
+      const profileCID = uploadResult.success ? uploadResult.cid || "" : "";
+
+      if (!uploadResult.success) {
+        console.warn("Profile upload failed, proceeding without CID:", uploadResult.error);
       }
 
       writeContract({
         address: USERS_ADDRESS,
         abi: USERS_ABI,
         functionName: "registerUser",
-        args: [identityHash, aadharHash],
+        args: [identityHash, aadharHash, panHash, profileCID],
       });
 
       setIsChecking(false);
@@ -326,7 +381,7 @@ export default function RegisterUser() {
     if (isConfirmed) {
       // Invalidate ALL queries to ensure fresh data when navigating to dashboard
       queryClient.invalidateQueries();
-      
+
       const timer = setTimeout(() => router.push('/dashboard'), 2000);
       return () => clearTimeout(timer);
     }
@@ -483,15 +538,14 @@ export default function RegisterUser() {
               {["form", "otp", "complete"].map((step, index) => (
                 <div key={step} className="flex items-center">
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
-                      verificationStep === step || 
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${verificationStep === step ||
                       (verificationStep === "verifying" && step === "form") ||
                       (verificationStep === "complete" && index <= 2)
-                        ? "bg-primary text-primary-foreground"
-                        : index < ["form", "otp", "complete"].indexOf(verificationStep)
-                          ? "bg-green-500 text-white"
-                          : "bg-secondary text-muted-foreground"
-                    }`}
+                      ? "bg-primary text-primary-foreground"
+                      : index < ["form", "otp", "complete"].indexOf(verificationStep)
+                        ? "bg-green-500 text-white"
+                        : "bg-secondary text-muted-foreground"
+                      }`}
                   >
                     {index < ["form", "verifying", "otp", "complete"].indexOf(verificationStep) ? (
                       <CheckCircle2 className="w-4 h-4" />
@@ -500,11 +554,10 @@ export default function RegisterUser() {
                     )}
                   </div>
                   {index < 2 && (
-                    <div className={`w-12 h-1 mx-1 rounded ${
-                      index < ["form", "verifying", "otp", "complete"].indexOf(verificationStep) - (verificationStep === "verifying" ? 0 : 0)
-                        ? "bg-green-500"
-                        : "bg-secondary"
-                    }`} />
+                    <div className={`w-12 h-1 mx-1 rounded ${index < ["form", "verifying", "otp", "complete"].indexOf(verificationStep) - (verificationStep === "verifying" ? 0 : 0)
+                      ? "bg-green-500"
+                      : "bg-secondary"
+                      }`} />
                   )}
                 </div>
               ))}
@@ -571,11 +624,10 @@ export default function RegisterUser() {
                       <Input
                         id="pan" name="pan"
                         placeholder="ABCDE1234F"
-                        className={`pl-10 bg-secondary/50 uppercase ${
-                          formData.pan.length === 10 
-                            ? (panValidation.isValid ? 'border-green-500' : 'border-red-500') 
-                            : 'border-border'
-                        }`}
+                        className={`pl-10 bg-secondary/50 uppercase ${formData.pan.length === 10
+                          ? (panValidation.isValid ? 'border-green-500' : 'border-red-500')
+                          : 'border-border'
+                          }`}
                         value={formData.pan}
                         onChange={handlePanChange}
                         maxLength={10}
@@ -597,11 +649,10 @@ export default function RegisterUser() {
                       <Input
                         id="aadhar" name="aadhar"
                         placeholder="Enter 12-digit Aadhaar"
-                        className={`pl-10 bg-secondary/50 ${
-                          formData.aadhar.length === 12 
-                            ? (aadhaarValidation.isValid ? 'border-green-500' : 'border-red-500') 
-                            : 'border-border'
-                        }`}
+                        className={`pl-10 bg-secondary/50 ${formData.aadhar.length === 12
+                          ? (aadhaarValidation.isValid ? 'border-green-500' : 'border-red-500')
+                          : 'border-border'
+                          }`}
                         value={formData.aadhar}
                         onChange={handleAadharChange}
                         maxLength={12}
@@ -611,7 +662,7 @@ export default function RegisterUser() {
                     </div>
                     <div className="flex justify-between">
                       <p className={`text-xs ${aadhaarValidation.isValid ? 'text-green-500' : formData.aadhar.length === 12 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                        {formData.aadhar.length}/12 digits 
+                        {formData.aadhar.length}/12 digits
                         {aadhaarValidation.isValid && ' ✓ Valid (Verhoeff check passed)'}
                         {formData.aadhar.length === 12 && !aadhaarValidation.isValid && ` - ${aadhaarValidation.error}`}
                       </p>
@@ -626,11 +677,10 @@ export default function RegisterUser() {
                       <Input
                         id="mobile" name="mobile"
                         placeholder="9876543210"
-                        className={`pl-20 bg-secondary/50 ${
-                          formData.mobile.length === 10 
-                            ? (mobileValidation.isValid ? 'border-green-500' : 'border-red-500') 
-                            : 'border-border'
-                        }`}
+                        className={`pl-20 bg-secondary/50 ${formData.mobile.length === 10
+                          ? (mobileValidation.isValid ? 'border-green-500' : 'border-red-500')
+                          : 'border-border'
+                          }`}
                         value={formData.mobile}
                         onChange={handleMobileChange}
                         maxLength={10}
@@ -706,7 +756,7 @@ export default function RegisterUser() {
                   <OTPInput
                     value={otpValue}
                     onChange={setOtpValue}
-                    onComplete={() => {}}
+                    onComplete={() => { }}
                     disabled={isChecking}
                     error={!!submitError}
                   />

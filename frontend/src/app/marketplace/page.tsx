@@ -16,7 +16,6 @@ import { EthPriceDisplay } from "@/components/shared/EthPriceDisplay";
 import { MapPin, Tag, ShoppingCart, Loader2, Info, AlertTriangle, ImageOff, Search, ArrowLeft, ArrowRight, Filter } from "lucide-react";
 import { motion } from "framer-motion";
 import { resolveIPFS, getIPFSUrl, PropertyMetadata } from "@/lib/ipfs";
-import { StaffRouteGuard } from "@/components/StaffRouteGuard";
 
 // Admin address for role detection
 const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -77,12 +76,15 @@ export default function Marketplace() {
   const isRevenueEmployee = employeeDept && Number(employeeDept) > 0;
   const isStaff = isAdmin || isLandInspector || isRevenueEmployee;
 
-  // Redirect unregistered users
+  // Staff members should not access marketplace (they use their portals)
+  // Redirect staff to their respective portals
   useEffect(() => {
-    if (!isCheckingRegistration && isRegistered === false && address && !isStaff) {
-      router.push('/register');
+    if (isMounted && address && isStaff) {
+      if (isAdmin) router.push('/admin');
+      else if (isLandInspector) router.push('/inspector');
+      else if (isRevenueEmployee) router.push('/revenue');
     }
-  }, [isRegistered, isCheckingRegistration, address, router, isStaff]);
+  }, [isMounted, address, isStaff, isAdmin, isLandInspector, isRevenueEmployee, router]);
 
   // Fetch Sales
   const { data: allSales, isLoading: isLoadingSales, refetch } = useReadContract({
@@ -168,19 +170,21 @@ export default function Marketplace() {
   const filteredAndSortedSales = useMemo(() => {
     let result = [...approvedSales];
 
-    // Search
+    // Search by ID, Owner, Location, Name, or Address
     if (searchTerm) {
       const lowerTerm = searchTerm.toLowerCase();
       result = result.filter(item => {
         const hash = item.property.ipfsHash;
         const meta = resolvedMetadata[hash];
         const name = (typeof meta === 'object' ? meta.name : `Property ${item.property.propertyId}`) || "";
+        const address = (typeof meta === 'object' ? meta.properties?.location?.address : "") || "";
 
         return (
           item.sale.propertyId.toString().includes(lowerTerm) ||
           item.sale.owner.toLowerCase().includes(lowerTerm) ||
           item.property.locationId.toString().includes(lowerTerm) ||
-          name.toLowerCase().includes(lowerTerm)
+          name.toLowerCase().includes(lowerTerm) ||
+          address.toLowerCase().includes(lowerTerm)
         );
       });
     }
@@ -237,21 +241,21 @@ export default function Marketplace() {
     );
   }
 
-  // ISSUE-2: Block unregistered users
-  if (!isRegistered && address && !isStaff && isMounted) {
+  // Staff members see a message redirecting them
+  if (isStaff && isMounted) {
     return (
       <DashboardLayout>
         <GlassCard className="p-8 max-w-md mx-auto text-center">
           <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">Registration Required</h2>
-          <Button onClick={() => router.push('/register')} variant="hero">Register Now</Button>
+          <h2 className="text-xl font-bold mb-2">Staff Portal Access Only</h2>
+          <p className="text-muted-foreground mb-4">As a staff member, please use your designated portal.</p>
+          <Button onClick={() => router.push('/dashboard')} variant="hero">Go to Dashboard</Button>
         </GlassCard>
       </DashboardLayout>
     );
   }
 
   return (
-    <StaffRouteGuard>
     <DashboardLayout>
       <div className="mb-8">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -261,7 +265,7 @@ export default function Marketplace() {
             </h1>
             <p className="textmuted-foreground">Find your dream land plot from verified listings.</p>
           </div>
-          
+
           {/* ETH Price - Compact View */}
           <EthPriceConverter compact showConverter={false} />
         </div>
@@ -272,7 +276,7 @@ export default function Marketplace() {
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by ID, Location, or Owner..."
+            placeholder="Search by Name, Address, Location, or ID..."
             className="pl-10 bg-secondary/50"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -365,7 +369,7 @@ export default function Marketplace() {
                       {/* Price Display with INR */}
                       <div className="bg-primary/5 p-3 rounded-lg border border-primary/10">
                         <p className="text-xs text-muted-foreground mb-1">Price</p>
-                        <EthPriceDisplay 
+                        <EthPriceDisplay
                           ethAmount={item.sale.price}
                           size="md"
                           layout="stacked"
@@ -373,9 +377,11 @@ export default function Marketplace() {
                         />
                       </div>
 
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <MapPin className="w-4 h-4" />
-                        <span>Loc: {item.property.locationId.toString()}</span>
+                      <div className="flex items-start gap-2 text-sm text-muted-foreground min-h-[40px]">
+                        <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
+                        <span className="line-clamp-2">
+                          {(resolvedMetadata[item.property.ipfsHash] as PropertyMetadata)?.properties?.location?.address || `Loc: ${item.property.locationId.toString()}`}
+                        </span>
                       </div>
 
                       <div className="pt-3 border-t border-border/50 flex justify-between items-center">
@@ -422,6 +428,5 @@ export default function Marketplace() {
         </>
       )}
     </DashboardLayout>
-    </StaffRouteGuard>
   );
 }

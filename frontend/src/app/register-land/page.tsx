@@ -12,8 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MapPin, Building, Ruler, Hash, ArrowLeft, Upload, AlertTriangle, FileText, Loader2, Cloud, ShieldX, Image as ImageIcon, Plus } from "lucide-react";
 import { uploadToIPFS, uploadMetadata, isPinataConfigured, PropertyMetadata } from "@/lib/ipfs";
-import { PropertyLocationPicker } from "@/components/PropertyLocationPicker";
+import dynamic from 'next/dynamic';
 import { StaffRouteGuard } from "@/components/StaffRouteGuard";
+
+// Dynamic import for Map to prevent SSR issues
+const PropertyLocationPicker = dynamic(
+  () => import("@/components/PropertyLocationPicker").then((mod) => mod.PropertyLocationPicker),
+  { ssr: false }
+);
 
 // Admin address for role detection
 const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -394,275 +400,275 @@ export default function RegisterLand() {
 
   return (
     <StaffRouteGuard>
-    <DashboardLayout>
-      <div className="mb-4">
-        <Link href="/dashboard" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
-        </Link>
-      </div>
+      <DashboardLayout>
+        <div className="mb-4">
+          <Link href="/dashboard" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+          </Link>
+        </div>
 
-      <div className="max-w-4xl mx-auto">
-        <GlassCard className="p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-foreground">Register New Land</h1>
-            <p className="text-muted-foreground mt-2">
-              Upload documents, pick location, and register on blockchain
-            </p>
-          </div>
-
-          <form onSubmit={uploadAndSubmit} className="space-y-8">
-
-            {/* Section 0: Property Name & Description */}
-            <div className="space-y-6 border-b border-border/50 pb-8">
-              <div className="space-y-2">
-                <Label htmlFor="propertyName">Property Name <span className="text-destructive">*</span></Label>
-                <Input 
-                  id="propertyName" 
-                  name="propertyName" 
-                  type="text" 
-                  required 
-                  className="bg-secondary/50 border-input" 
-                  value={formData.propertyName} 
-                  onChange={handleChange} 
-                  placeholder="e.g. Prime Agricultural Land in Kurnool"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="description">Description</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleEnhanceDescription}
-                    disabled={isEnhancingDescription || !formData.description.trim()}
-                    className="text-xs h-7"
-                  >
-                    {isEnhancingDescription ? (
-                      <>
-                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        Enhancing...
-                      </>
-                    ) : (
-                      <>✨ Enhance with AI</>
-                    )}
-                  </Button>
-                </div>
-                <textarea
-                  id="description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  className="w-full rounded-md border bg-secondary/50 px-3 py-2 text-sm min-h-[100px] resize-y"
-                  placeholder="Describe the property... (e.g. Fertile agricultural land with water access, suitable for farming)"
-                />
-                <p className="text-xs text-muted-foreground">
-                  💡 Tip: Write a basic description and click "Enhance with AI" to improve it!
-                </p>
-              </div>
-            </div>
-
-            {/* Section 1: Property Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="locationId">Location ID (Region Code)</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="locationId" name="locationId" type="number" required className="pl-10 bg-secondary/50 border-input" value={formData.locationId} onChange={handleChange} placeholder="e.g. 560001" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="revenueDeptId">Revenue Dept ID</Label>
-                <div className="relative">
-                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="revenueDeptId" name="revenueDeptId" type="number" required className="pl-10 bg-secondary/50 border-input" value={formData.revenueDeptId} onChange={handleChange} placeholder="e.g. 101" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="surveyNumber">Survey Number (Auto-Generated)</Label>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="surveyNumber"
-                    name="surveyNumber"
-                    type="number"
-                    required
-                    readOnly
-                    className="pl-10 bg-secondary/30 border-input cursor-not-allowed opacity-80"
-                    value={formData.surveyNumber}
-                    onChange={handleChange}
-                    placeholder="Auto-generated..."
-                  />
-                  {isLoadingLocationProps && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Loader2 className="w-3 h-3 animate-spin text-primary" />
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="area">Area (sq. ft)</Label>
-                <div className="relative">
-                  <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="area" name="area" type="number" required className="pl-10 bg-secondary/50 border-input" value={formData.area} onChange={handleChange} placeholder="e.g. 1200" />
-                </div>
-              </div>
-            </div>
-
-            {/* Section 2: Map Location with Address Autocomplete */}
-            <PropertyLocationPicker
-              onLocationSelect={handleLocationSelect}
-              initialPosition={[formData.lat, formData.lng]}
-              initialAddress={formData.addressLine}
-              height="450px"
-            />
-
-            {/* Address Line Field - Auto-filled from map */}
-            <div className="space-y-2">
-              <Label htmlFor="addressLine">
-                Property Address
-                {formData.addressLine && <span className="text-green-500 text-xs ml-2">✓ Auto-filled from map</span>}
-              </Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                <textarea
-                  id="addressLine"
-                  name="addressLine"
-                  value={formData.addressLine}
-                  onChange={handleChange}
-                  className="w-full rounded-md border bg-background px-3 py-2 pl-10 text-sm min-h-[80px] resize-y"
-                  placeholder="Click on the map above to auto-fill the address, or type manually..."
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                ✏️ You can edit the address after it's auto-filled from the map.
+        <div className="max-w-4xl mx-auto">
+          <GlassCard className="p-8">
+            <div className="text-center mb-8">
+              <h1 className="text-2xl font-bold text-foreground">Register New Land</h1>
+              <p className="text-muted-foreground mt-2">
+                Upload documents, pick location, and register on blockchain
               </p>
-              {formData.lat && formData.lng && (
-                <div className="flex gap-4 text-xs font-mono text-muted-foreground bg-secondary/30 p-2 rounded mt-2">
-                  <span>📍 Coordinates: {formData.lat.toFixed(6)}, {formData.lng.toFixed(6)}</span>
+            </div>
+
+            <form onSubmit={uploadAndSubmit} className="space-y-8">
+
+              {/* Section 0: Property Name & Description */}
+              <div className="space-y-6 border-b border-border/50 pb-8">
+                <div className="space-y-2">
+                  <Label htmlFor="propertyName">Property Name <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="propertyName"
+                    name="propertyName"
+                    type="text"
+                    required
+                    className="bg-secondary/50 border-input"
+                    value={formData.propertyName}
+                    onChange={handleChange}
+                    placeholder="e.g. Prime Agricultural Land in Kurnool"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="description">Description</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleEnhanceDescription}
+                      disabled={isEnhancingDescription || !formData.description.trim()}
+                      className="text-xs h-7"
+                    >
+                      {isEnhancingDescription ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Enhancing...
+                        </>
+                      ) : (
+                        <>✨ Enhance with AI</>
+                      )}
+                    </Button>
+                  </div>
+                  <textarea
+                    id="description"
+                    name="description"
+                    value={formData.description}
+                    onChange={handleChange}
+                    className="w-full rounded-md border bg-secondary/50 px-3 py-2 text-sm min-h-[100px] resize-y"
+                    placeholder="Describe the property... (e.g. Fertile agricultural land with water access, suitable for farming)"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    💡 Tip: Write a basic description and click "Enhance with AI" to improve it!
+                  </p>
+                </div>
+              </div>
+
+              {/* Section 1: Property Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="locationId">Location ID (Region Code)</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="locationId" name="locationId" type="number" required className="pl-10 bg-secondary/50 border-input" value={formData.locationId} onChange={handleChange} placeholder="e.g. 560001" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="revenueDeptId">Revenue Dept ID</Label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="revenueDeptId" name="revenueDeptId" type="number" required className="pl-10 bg-secondary/50 border-input" value={formData.revenueDeptId} onChange={handleChange} placeholder="e.g. 101" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="surveyNumber">Survey Number (Auto-Generated)</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="surveyNumber"
+                      name="surveyNumber"
+                      type="number"
+                      required
+                      readOnly
+                      className="pl-10 bg-secondary/30 border-input cursor-not-allowed opacity-80"
+                      value={formData.surveyNumber}
+                      onChange={handleChange}
+                      placeholder="Auto-generated..."
+                    />
+                    {isLoadingLocationProps && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="area">Area (sq. ft)</Label>
+                  <div className="relative">
+                    <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="area" name="area" type="number" required className="pl-10 bg-secondary/50 border-input" value={formData.area} onChange={handleChange} placeholder="e.g. 1200" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Map Location with Address Autocomplete */}
+              <PropertyLocationPicker
+                onLocationSelect={handleLocationSelect}
+                initialPosition={[formData.lat, formData.lng]}
+                initialAddress={formData.addressLine}
+                height="450px"
+              />
+
+              {/* Address Line Field - Auto-filled from map */}
+              <div className="space-y-2">
+                <Label htmlFor="addressLine">
+                  Property Address
+                  {formData.addressLine && <span className="text-green-500 text-xs ml-2">✓ Auto-filled from map</span>}
+                </Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                  <textarea
+                    id="addressLine"
+                    name="addressLine"
+                    value={formData.addressLine}
+                    onChange={handleChange}
+                    className="w-full rounded-md border bg-background px-3 py-2 pl-10 text-sm min-h-[80px] resize-y"
+                    placeholder="Click on the map above to auto-fill the address, or type manually..."
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  ✏️ You can edit the address after it's auto-filled from the map.
+                </p>
+                {formData.lat && formData.lng && (
+                  <div className="flex gap-4 text-xs font-mono text-muted-foreground bg-secondary/30 p-2 rounded mt-2">
+                    <span>📍 Coordinates: {formData.lat.toFixed(6)}, {formData.lng.toFixed(6)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 3: Documents & Photos */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Cover Photo */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4" /> Cover Photo <span className="text-destructive">*</span>
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Main image for marketplace listing (JPG/PNG)</p>
+                  <label className="block p-4 border-2 border-dashed border-border hover:border-primary rounded-lg cursor-pointer transition-colors bg-secondary/20">
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'cover')} />
+                    <div className="flex flex-col items-center gap-2 text-center">
+                      {files.coverPhoto ? (
+                        <>
+                          <div className="text-primary font-medium truncate w-full">{files.coverPhoto.name}</div>
+                          <div className="text-xs text-muted-foreground">Click to change</div>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-8 h-8 text-muted-foreground" />
+                          <span className="text-sm">Upload Cover Photo</span>
+                        </>
+                      )}
+                    </div>
+                  </label>
+                </div>
+
+                {/* Deed Document */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> Deed Document <span className="text-destructive">*</span>
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Official Government Deed (PDF/Image)</p>
+                  <label className="block p-4 border-2 border-dashed border-border hover:border-primary rounded-lg cursor-pointer transition-colors bg-secondary/20">
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={(e) => handleFileChange(e, 'deed')} />
+                    <div className="flex flex-col items-center gap-2 text-center">
+                      {files.deedDocument ? (
+                        <>
+                          <div className="text-primary font-medium truncate w-full">{files.deedDocument.name}</div>
+                          <div className="text-xs text-muted-foreground">Click to change</div>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-8 h-8 text-muted-foreground" />
+                          <span className="text-sm">Upload Deed (PDF)</span>
+                        </>
+                      )}
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Extra Photos */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Plus className="w-4 h-4" /> Additional Photos <span className="text-xs text-muted-foreground font-normal">(Optional - Max 5 recommended)</span>
+                </Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {files.extraPhotos.map((file, i) => (
+                    <div key={i} className="relative group aspect-square bg-secondary rounded-lg flex items-center justify-center overflow-hidden border border-border">
+                      <span className="text-xs text-center p-2 truncate w-full">{file.name}</span>
+                      <button type="button" onClick={() => removeExtraPhoto(i)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <label className="aspect-square border-2 border-dashed border-border hover:border-primary rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors text-muted-foreground hover:text-primary">
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFileChange(e, 'extra')} />
+                    <Plus className="w-6 h-6 mb-1" />
+                    <span className="text-xs">Add</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Submission Status */}
+              {uploadError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> {uploadError}
                 </div>
               )}
-            </div>
-
-            {/* Section 3: Documents & Photos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Cover Photo */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4" /> Cover Photo <span className="text-destructive">*</span>
-                </Label>
-                <p className="text-xs text-muted-foreground">Main image for marketplace listing (JPG/PNG)</p>
-                <label className="block p-4 border-2 border-dashed border-border hover:border-primary rounded-lg cursor-pointer transition-colors bg-secondary/20">
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'cover')} />
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    {files.coverPhoto ? (
-                      <>
-                        <div className="text-primary font-medium truncate w-full">{files.coverPhoto.name}</div>
-                        <div className="text-xs text-muted-foreground">Click to change</div>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-8 h-8 text-muted-foreground" />
-                        <span className="text-sm">Upload Cover Photo</span>
-                      </>
-                    )}
-                  </div>
-                </label>
-              </div>
-
-              {/* Deed Document */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" /> Deed Document <span className="text-destructive">*</span>
-                </Label>
-                <p className="text-xs text-muted-foreground">Official Government Deed (PDF/Image)</p>
-                <label className="block p-4 border-2 border-dashed border-border hover:border-primary rounded-lg cursor-pointer transition-colors bg-secondary/20">
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={(e) => handleFileChange(e, 'deed')} />
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    {files.deedDocument ? (
-                      <>
-                        <div className="text-primary font-medium truncate w-full">{files.deedDocument.name}</div>
-                        <div className="text-xs text-muted-foreground">Click to change</div>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-8 h-8 text-muted-foreground" />
-                        <span className="text-sm">Upload Deed (PDF)</span>
-                      </>
-                    )}
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Extra Photos */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Plus className="w-4 h-4" /> Additional Photos <span className="text-xs text-muted-foreground font-normal">(Optional - Max 5 recommended)</span>
-              </Label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {files.extraPhotos.map((file, i) => (
-                  <div key={i} className="relative group aspect-square bg-secondary rounded-lg flex items-center justify-center overflow-hidden border border-border">
-                    <span className="text-xs text-center p-2 truncate w-full">{file.name}</span>
-                    <button type="button" onClick={() => removeExtraPhoto(i)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
-                      Remove
-                    </button>
-                  </div>
-                ))}
-                <label className="aspect-square border-2 border-dashed border-border hover:border-primary rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors text-muted-foreground hover:text-primary">
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFileChange(e, 'extra')} />
-                  <Plus className="w-6 h-6 mb-1" />
-                  <span className="text-xs">Add</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Submission Status */}
-            {uploadError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" /> {uploadError}
-              </div>
-            )}
-            {submitError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" /> {submitError}
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              disabled={isConfirming || isUploading}
-              className="w-full"
-              variant="hero"
-            >
-              {isConfirming ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Confirming Transaction...
-                </>
-              ) : isUploading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  {currentUploadStep}
-                </>
-              ) : (
-                "Register Property"
+              {submitError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> {submitError}
+                </div>
               )}
-            </Button>
-          </form>
 
-          {hash && <div className="mt-6 p-4 bg-secondary/50 rounded-lg text-xs break-all font-mono border border-border">Tx Hash: {hash}</div>}
+              <Button
+                type="submit"
+                disabled={isConfirming || isUploading}
+                className="w-full"
+                variant="hero"
+              >
+                {isConfirming ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Confirming Transaction...
+                  </>
+                ) : isUploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    {currentUploadStep}
+                  </>
+                ) : (
+                  "Register Property"
+                )}
+              </Button>
+            </form>
 
-          {isConfirmed && (
-            <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-green-500 text-center text-sm font-bold animate-in bounce-in">
-              Success! Redirecting to dashboard...
-            </div>
-          )}
+            {hash && <div className="mt-6 p-4 bg-secondary/50 rounded-lg text-xs break-all font-mono border border-border">Tx Hash: {hash}</div>}
 
-        </GlassCard>
-      </div>
-    </DashboardLayout>
+            {isConfirmed && (
+              <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-green-500 text-center text-sm font-bold animate-in bounce-in">
+                Success! Redirecting to dashboard...
+              </div>
+            )}
+
+          </GlassCard>
+        </div>
+      </DashboardLayout>
     </StaffRouteGuard>
   );
 }

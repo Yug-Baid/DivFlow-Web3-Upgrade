@@ -41,7 +41,7 @@ export default function PriceCheckerPage() {
         <GlassCard className="mb-6 p-8">
           <div className="text-center space-y-4">
             <div className="text-sm text-muted-foreground">Current Exchange Rate</div>
-            
+
             {loading && inr === 0 ? (
               <div className="animate-pulse text-2xl text-muted-foreground">Loading...</div>
             ) : error && !inr ? (
@@ -52,7 +52,7 @@ export default function PriceCheckerPage() {
                   ₹{inr.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-xl text-muted-foreground">per 1 ETH</div>
-                
+
                 {change24h !== 0 && (
                   <div className={`flex items-center justify-center gap-2 text-lg ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
                     {isPositive ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
@@ -85,7 +85,7 @@ export default function PriceCheckerPage() {
                 Common property price conversions
               </p>
             </div>
-            
+
             <div className="p-4 space-y-3">
               {popularConversions.map(({ eth, label }) => {
                 const inrValue = eth * inr;
@@ -122,27 +122,11 @@ export default function PriceCheckerPage() {
               <div className="flex items-start gap-3">
                 <TrendingUp className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-muted-foreground">
-                  <strong className="text-foreground">Note:</strong> Prices are fetched from CoinGecko and update in real-time. 
+                  <strong className="text-foreground">Note:</strong> Prices are fetched from CoinGecko and update in real-time.
                   Actual transaction amounts are in ETH. The INR value is for reference only.
                 </div>
               </div>
             </div>
-          </div>
-        </GlassCard>
-
-        {/* Historical Data Placeholder */}
-        <GlassCard className="mt-6">
-          <div className="p-4 border-b bg-muted/50">
-            <h3 className="font-semibold">Price Trends</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              24-hour price movement
-            </p>
-          </div>
-          
-          <div className="p-8 text-center text-muted-foreground">
-            <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p className="text-sm">Price trend charts coming soon</p>
-            <p className="text-xs mt-1">Track ETH/INR historical data</p>
           </div>
         </GlassCard>
       </div>
