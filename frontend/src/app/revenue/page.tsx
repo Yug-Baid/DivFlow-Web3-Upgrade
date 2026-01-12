@@ -12,10 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
-import { Building, CheckCircle, Search, FileCheck, XCircle, Info, FileText, Image as ImageIcon, History, ExternalLink, Eye, MessageCircle } from "lucide-react";
+import { Building, CheckCircle, Search, FileCheck, XCircle, Info, FileText, Image as ImageIcon, History, ExternalLink, Eye, MessageCircle, Copy, MapPin } from "lucide-react";
 import { UserInfoModal } from "@/components/UserInfoModal";
+import { PropertyDetailsModal } from "@/components/PropertyDetailsModal";
 import { resolveIPFS, getIPFSUrl, PropertyMetadata } from "@/lib/ipfs";
-import { IPFSChatModal } from "@/components/shared/IPFSChatModal";
 import dynamic from 'next/dynamic';
 
 const DynamicMap = dynamic(() => import('@/components/PropertyMap'), {
@@ -40,7 +40,8 @@ export default function RevenueDashboard() {
   const [resolvedMetadata, setResolvedMetadata] = useState<Record<string, PropertyMetadata | string>>({});
   const [historyLogs, setHistoryLogs] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [chatPropertyId, setChatPropertyId] = useState<string | null>(null);
+  const [inspectors, setInspectors] = useState<Record<string, string>>({});
+  const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -106,7 +107,7 @@ export default function RevenueDashboard() {
     }) || [],
     [properties]);
 
-  // Resolve Metadata
+  // Resolve Metadata and Fetch Inspectors
   useEffect(() => {
     pendingProperties.forEach(async (p: any) => {
       const hash = p.ipfsHash;
@@ -119,8 +120,24 @@ export default function RevenueDashboard() {
           setResolvedMetadata(prev => ({ ...prev, [hash]: data }));
         }
       }
+
+      // Fetch Inspector for this property's Location
+      if (p.locationId && publicClient) {
+        try {
+          const inspector = await publicClient.readContract({
+            address: LAND_REGISTRY_ADDRESS,
+            abi: LAND_REGISTRY_ABI,
+            functionName: 'landInspectorByLocation',
+            args: [p.locationId]
+          }) as string;
+
+          if (inspector && inspector !== '0x0000000000000000000000000000000000000000') {
+            setInspectors(prev => ({ ...prev, [p.propertyId.toString()]: inspector }));
+          }
+        } catch (e) { console.error("Error fetching inspector", e); }
+      }
     });
-  }, [pendingProperties]);
+  }, [pendingProperties, publicClient]);
 
   // Fetch History Logs
   const fetchHistory = async () => {
@@ -312,10 +329,9 @@ export default function RevenueDashboard() {
                     <GlassCard hover className="relative overflow-hidden flex flex-col h-full">
                       <div className="flex justify-between items-start mb-4">
                         <h3 className="font-bold text-lg">Property #{property.propertyId.toString()}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
-                          isSalePending ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${isSalePending ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' :
                           'bg-blue-500/10 text-blue-500 border-blue-500/20'
-                        }`}>
+                          }`}>
                           Status: {isSalePending ? 'Sale Pending' : 'Verification Pending'}
                         </span>
                       </div>
@@ -333,6 +349,17 @@ export default function RevenueDashboard() {
                           </div>
                         </div>
 
+                        {/* Property Address from IPFS */}
+                        {meta?.properties?.location?.address && (
+                          <div className="p-2 bg-secondary/30 rounded text-sm">
+                            <span className="text-xs text-muted-foreground block mb-1">Property Address</span>
+                            <div className="flex items-start gap-1">
+                              <MapPin className="w-3 h-3 mt-0.5 text-primary shrink-0" />
+                              <span className="text-foreground">{meta.properties.location.address}</span>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Map Component */}
                         {(meta?.properties?.location?.lat && meta?.properties?.location?.lng) && (
                           <div className="h-32 w-full rounded-lg overflow-hidden border border-border/50">
@@ -343,13 +370,32 @@ export default function RevenueDashboard() {
                           </div>
                         )}
 
-                        <div className="flex items-center justify-between p-2 bg-secondary/30 rounded text-sm">
+                        <div className="flex items-center justify-between p-2 bg-secondary/30 rounded text-sm mb-2">
                           <span className="text-muted-foreground">Owner</span>
                           <div className="flex items-center gap-2">
                             <span className="font-mono">{property.owner.slice(0, 6)}...</span>
                             <Button size="icon" variant="ghost" className="h-4 w-4" onClick={() => setSelectedUserAddress(property.owner)}>
                               <Info className="w-3 h-3" />
                             </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-2 bg-purple-500/10 border border-purple-500/20 rounded text-sm">
+                          <span className="text-purple-400 text-xs uppercase font-semibold">Inspector</span>
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono text-xs break-all max-w-[180px]">
+                              {inspectors[property.propertyId.toString()] || "Unknown"}
+                            </span>
+                            {inspectors[property.propertyId.toString()] && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5 shrink-0"
+                                onClick={() => navigator.clipboard.writeText(inspectors[property.propertyId.toString()])}
+                              >
+                                <Copy className="w-3 h-3" />
+                              </Button>
+                            )}
                           </div>
                         </div>
 
@@ -383,6 +429,16 @@ export default function RevenueDashboard() {
                             ))}
                           </div>
                         </div>
+
+                        {/* View Details Button */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full mt-2"
+                          onClick={() => setSelectedProperty(property)}
+                        >
+                          <Eye className="w-4 h-4 mr-2" /> View Details
+                        </Button>
                       </div>
 
                       {/* Actions */}
@@ -443,15 +499,6 @@ export default function RevenueDashboard() {
                                 </div>
                               )}
                             </div>
-
-                            <Button
-                              className="w-full"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setChatPropertyId(property.propertyId.toString())}
-                            >
-                              <MessageCircle className="w-4 h-4 mr-2" /> Open Chat
-                            </Button>
                           </div>
                         )
                       ) : (
@@ -519,17 +566,15 @@ export default function RevenueDashboard() {
         isOpen={!!selectedUserAddress}
         onClose={() => setSelectedUserAddress(null)}
         userAddress={selectedUserAddress || ""}
+        isStaffView={true}
       />
-      
-      {chatPropertyId && (
-        <IPFSChatModal
-          propertyId={chatPropertyId}
-          inspectorAddress={"0x0000000000000000000000000000000000000000"} // Placeholder
-          revenueAddress={address || ""}
-          currentUserAddress={address || ""}
-          onClose={() => setChatPropertyId(null)}
-        />
-      )}
+
+      <PropertyDetailsModal
+        isOpen={!!selectedProperty}
+        onClose={() => setSelectedProperty(null)}
+        property={selectedProperty}
+      />
+
     </DashboardLayout>
   );
 }

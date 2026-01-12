@@ -291,6 +291,8 @@ export const USERS_ABI = [
     inputs: [
       { internalType: "bytes32", name: "_identityHash", type: "bytes32" },
       { internalType: "bytes32", name: "_aadharHash", type: "bytes32" },
+      { internalType: "bytes32", name: "_panHash", type: "bytes32" },
+      { internalType: "string", name: "_profileCID", type: "string" },
     ],
     name: "registerUser",
     outputs: [],
@@ -304,11 +306,27 @@ export const USERS_ABI = [
     stateMutability: "view",
     type: "function",
   },
-  // PRE-CHECK: Check if Aadhaar already registered (saves gas on duplicates)
+  // PRE-CHECK: Check if Aadhaar already registered
   {
     inputs: [{ internalType: "bytes32", name: "_aadharHash", type: "bytes32" }],
     name: "isAadharRegistered",
     outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  // PRE-CHECK: Check if PAN already registered
+  {
+    inputs: [{ internalType: "bytes32", name: "_panHash", type: "bytes32" }],
+    name: "isPanRegistered",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  // Get user's IPFS profile CID (for staff to view details)
+  {
+    inputs: [{ internalType: "address", name: "_userId", type: "address" }],
+    name: "getUserProfileCID",
+    outputs: [{ internalType: "string", name: "", type: "string" }],
     stateMutability: "view",
     type: "function",
   },
@@ -324,7 +342,7 @@ export const USERS_ABI = [
       { internalType: "address", name: "_userId", type: "address" },
       { internalType: "string", name: "_firstName", type: "string" },
       { internalType: "string", name: "_lastName", type: "string" },
-      { internalType: "string", name: "_dateOfBirth", type: "string" },
+      { internalType: "string", name: "_pan", type: "string" },
       { internalType: "string", name: "_aadhar", type: "string" },
     ],
     name: "verifyIdentity",

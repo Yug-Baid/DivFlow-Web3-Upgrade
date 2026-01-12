@@ -35,14 +35,16 @@ contract FullFlowTest is Test {
     function testFullSaleFlow() public {
         // 1. Register Users (using hashed identity for privacy)
         vm.prank(seller);
-        bytes32 sellerIdentity = keccak256(abi.encodePacked("Seller", "User", "01-01-1990", "123456789012"));
+        bytes32 sellerIdentity = keccak256(abi.encodePacked("Seller", "User", "ABCDE1234F", "123456789012"));
         bytes32 sellerAadhar = keccak256(abi.encodePacked("123456789012"));
-        usersContract.registerUser(sellerIdentity, sellerAadhar);
+        bytes32 sellerPan = keccak256(abi.encodePacked("ABCDE1234F"));
+        usersContract.registerUser(sellerIdentity, sellerAadhar, sellerPan, "QmSellerProfile");
         
         vm.prank(buyer);
-        bytes32 buyerIdentity = keccak256(abi.encodePacked("Buyer", "User", "01-01-1995", "987654321098"));
+        bytes32 buyerIdentity = keccak256(abi.encodePacked("Buyer", "User", "FGHIJ5678K", "987654321098"));
         bytes32 buyerAadhar = keccak256(abi.encodePacked("987654321098"));
-        usersContract.registerUser(buyerIdentity, buyerAadhar);
+        bytes32 buyerPan = keccak256(abi.encodePacked("FGHIJ5678K"));
+        usersContract.registerUser(buyerIdentity, buyerAadhar, buyerPan, "QmBuyerProfile");
 
         // 2. Register Land (Seller) - now with landType parameter (0 = WithPapers)
         vm.prank(seller);

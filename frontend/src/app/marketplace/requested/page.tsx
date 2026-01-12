@@ -10,8 +10,9 @@ import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EthPriceDisplay } from "@/components/shared/EthPriceDisplay";
-import { Clock, CheckCircle, XCircle, ShoppingBag, ArrowRight, Loader2, AlertTriangle } from "lucide-react";
+import { Clock, CheckCircle, XCircle, ShoppingBag, ArrowRight, Loader2, AlertTriangle, History, ExternalLink, Copy } from "lucide-react";
 import { motion } from "framer-motion";
 import { StaffRouteGuard } from "@/components/StaffRouteGuard";
 
@@ -45,6 +46,8 @@ export default function RequestedSales() {
     const router = useRouter();
     const { address, isConnected } = useAccount();
     const [mounted, setMounted] = useState(false);
+    const [buyHistory, setBuyHistory] = useState<any[]>([]);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
     useEffect(() => {
         setMounted(true);
@@ -78,8 +81,7 @@ export default function RequestedSales() {
     const isRevenueEmployee = employeeDept && Number(employeeDept) > 0;
     const isStaff = isAdmin || isLandInspector || isRevenueEmployee;
 
-    // ISSUE-2: Redirect unregistered non-staff users
-    // ISSUE-2: Redirect unregistered non-staff users or disconnected users
+    // Redirect unregistered non-staff users
     useEffect(() => {
         if (mounted && !isConnected) {
             router.push('/');
@@ -99,7 +101,7 @@ export default function RequestedSales() {
         query: { enabled: !!address },
     });
 
-    // FIX BUG-3: Deduplicate sales by saleId
+    // Deduplicate sales by saleId
     const uniqueSales = useMemo(() => {
         if (!sales) return [];
         const salesMap = new Map<string, any>();
@@ -109,40 +111,81 @@ export default function RequestedSales() {
         return Array.from(salesMap.values());
     }, [sales]);
 
+    // Separate active vs completed sales
+    const activeSales = useMemo(() =>
+        uniqueSales.filter((sale: any) => sale.state !== SaleState.Success),
+        [uniqueSales]
+    );
+
+    // Completed sales where THIS user was the buyer (acceptedFor matches address)
+    const completedSales = useMemo(() =>
+        uniqueSales.filter((sale: any) =>
+            sale.state === SaleState.Success &&
+            sale.acceptedFor?.toLowerCase() === address?.toLowerCase()
+        ),
+        [uniqueSales, address]
+    );
+
+    // Use completedSales instead of events for Buy History
+    useEffect(() => {
+        setBuyHistory(completedSales);
+        setIsLoadingHistory(false);
+    }, [completedSales]);
+
     // Fetch getRequestedUsers for each unique sale
     const requestedUsersQueries = useMemo(() =>
-        uniqueSales.map((sale: any) => ({
+        activeSales.map((sale: any) => ({
             address: TRANSFER_OWNERSHIP_ADDRESS as `0x${string}`,
             abi: TRANSFER_OWNERSHIP_ABI,
             functionName: "getRequestedUsers",
             args: [sale.saleId],
         })),
-        [uniqueSales]
+        [activeSales]
     );
 
     const { data: requestedUsersResults, isLoading: isLoadingRequests } = useReadContracts({
         contracts: requestedUsersQueries,
-        query: { enabled: uniqueSales.length > 0 },
+        query: { enabled: activeSales.length > 0 },
     });
 
-    // Create a map of saleId -> all of this user's bids with their states
+    // Create a map of saleId -> the most relevant bid for this user
+    // Priority: Accepted (state 2) > Pending (state 0 or 6) > Cancelled (filtered out)
     const myBidsPerSale = useMemo(() => {
         if (!requestedUsersResults || !address) return {};
         const bidsMap: Record<string, any[]> = {};
 
-        uniqueSales.forEach((sale: any, index: number) => {
+        activeSales.forEach((sale: any, index: number) => {
             const result = requestedUsersResults[index];
             if (result.status === 'success' && result.result) {
                 const requests = result.result as any[];
-                // Find ALL of this user's bids in this sale
+                // Get all bids from this user
                 const myBids = requests.filter(
                     (req: any) => req.user.toLowerCase() === address.toLowerCase()
                 );
-                bidsMap[sale.saleId.toString()] = myBids;
+
+                // Filter out cancelled bids (state 1) and rejected (state 3)
+                // Keep: Pending (0), Accepted (2), ReRequested (6), SuccessfullyTransferred (7)
+                const relevantBids = myBids.filter((bid: any) =>
+                    bid.state !== 1 && bid.state !== 3
+                );
+
+                // If there's an accepted bid (state 2), only show that one
+                const acceptedBid = relevantBids.find((bid: any) => bid.state === 2);
+                if (acceptedBid) {
+                    bidsMap[sale.saleId.toString()] = [acceptedBid];
+                } else if (relevantBids.length > 0) {
+                    // Show highest pending bid only
+                    const sortedBids = [...relevantBids].sort((a, b) =>
+                        Number(b.priceOffered - a.priceOffered)
+                    );
+                    bidsMap[sale.saleId.toString()] = [sortedBids[0]];
+                } else {
+                    bidsMap[sale.saleId.toString()] = [];
+                }
             }
         });
         return bidsMap;
-    }, [requestedUsersResults, uniqueSales, address]);
+    }, [requestedUsersResults, activeSales, address]);
 
     const { writeContract, data: hash, error: writeError } = useWriteContract();
     const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
@@ -175,39 +218,31 @@ export default function RequestedSales() {
 
     // Helper to get bid status display
     const getBidStatus = (bid: any, sale: any) => {
-        // Check if this specific bid was accepted (matches BOTH address AND price)
         const isThisBidAccepted = sale.acceptedFor.toLowerCase() === address?.toLowerCase() &&
             sale.acceptedPrice === bid.priceOffered;
 
-        // FIX: Check if this bid was explicitly rejected by seller
         if (bid.state === RequestState.SellerRejectedPurchaseRequest) {
             return { text: "Rejected", color: "bg-red-500/20 text-red-400", icon: XCircle, borderColor: "border-red-500/30" };
         }
 
-        // Check if sale is completed (Success state = 3)
         if (sale.state === SaleState.Success) {
-            // Check if THIS user's bid was the winning one
             if (bid.state === RequestState.SuccessfullyTransfered) {
                 return { text: "Purchased!", color: "bg-green-500/20 text-green-400", icon: CheckCircle, borderColor: "border-green-500/30" };
             }
-            // This user's bid was NOT the winning one
             return { text: "Outbid", color: "bg-orange-500/20 text-orange-400", icon: XCircle, borderColor: "border-orange-500/30" };
         }
 
-        // Sale is accepted to a buyer but not yet completed
         if (sale.state === SaleState.AcceptedToABuyer) {
             if (isThisBidAccepted) {
                 return { text: "Accepted! Pay Now", color: "bg-green-500/20 text-green-400", icon: CheckCircle, borderColor: "border-green-500/50" };
             }
-            // Another bid was accepted
             return { text: "Outbid", color: "bg-orange-500/20 text-orange-400", icon: XCircle, borderColor: "border-orange-500/30" };
         }
 
-        // Otherwise pending (sale still active)
         return { text: "Pending", color: "bg-yellow-500/20 text-yellow-400", icon: Clock, borderColor: "border-yellow-500/30" };
     };
 
-    // ISSUE-2: Show loading while checking registration
+    // Show loading while checking registration
     if (isCheckingRegistration && !mounted) {
         return (
             <DashboardLayout>
@@ -218,7 +253,7 @@ export default function RequestedSales() {
         );
     }
 
-    // ISSUE-2: Block unregistered users with a message
+    // Block unregistered users with a message
     if (!isRegistered && address && !isStaff && mounted) {
         return (
             <DashboardLayout>
@@ -238,155 +273,221 @@ export default function RequestedSales() {
 
     return (
         <StaffRouteGuard>
-        <DashboardLayout>
-            <div className="mb-8 flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground mb-2">My Requests</h1>
-                    <p className="text-muted-foreground">Track the status of your purchase requests</p>
-                </div>
-                <Button variant="ghost-glow" onClick={() => refetch()} size="sm">
-                    Refresh
-                </Button>
-            </div>
-
-            {isLoading || !mounted ? (
-                <div className="text-center py-10 text-muted-foreground animate-pulse">Loading requests...</div>
-            ) : uniqueSales.length === 0 ? (
-                <GlassCard className="text-center py-20">
-                    <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <ShoppingBag className="w-8 h-8 text-muted-foreground" />
+            <DashboardLayout>
+                <div className="mb-8 flex justify-between items-center">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground mb-2">My Requests</h1>
+                        <p className="text-muted-foreground">Track the status of your purchase requests</p>
                     </div>
-                    <h3 className="text-lg font-medium text-foreground">No Requests Found</h3>
-                    <p className="text-muted-foreground mt-2 mb-6">You haven't requested to buy any properties yet.</p>
-                    <Link href="/marketplace">
-                        <Button variant="hero">Browse Marketplace</Button>
-                    </Link>
-                </GlassCard>
-            ) : (
-                <motion.div
-                    variants={containerVariants}
-                    initial="hidden"
-                    animate="visible"
-                    className="grid grid-cols-1 md:grid-cols-2 gap-6"
-                >
-                    {uniqueSales.map((sale: any) => {
-                        const myBids = myBidsPerSale[sale.saleId.toString()] || [];
+                    <Button variant="ghost-glow" onClick={() => refetch()} size="sm">
+                        Refresh
+                    </Button>
+                </div>
 
-                        return (
-                            <motion.div key={sale.saleId.toString()} variants={itemVariants}>
-                                <GlassCard hover className="relative overflow-hidden">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h3 className="font-semibold text-lg text-foreground">Sale #{sale.saleId.toString()}</h3>
-                                            <p className="text-sm text-muted-foreground">Property #{sale.propertyId.toString()}</p>
-                                        </div>
-                                    </div>
+                <Tabs defaultValue="active" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 mb-8">
+                        <TabsTrigger value="active">Active Requests</TabsTrigger>
+                        <TabsTrigger value="history">Buy History</TabsTrigger>
+                    </TabsList>
 
-                                    {/* Listed Price with INR */}
-                                    <div className="p-3 rounded-lg bg-secondary/30 border border-border/50 mb-3">
-                                        <p className="text-xs text-muted-foreground mb-1.5">Listed Price</p>
-                                        <EthPriceDisplay 
-                                            ethAmount={sale.price}
-                                            size="sm"
-                                            layout="inline"
-                                            emphasize="both"
-                                        />
-                                    </div>
+                    {/* Active Requests Tab */}
+                    <TabsContent value="active">
+                        {isLoading || !mounted ? (
+                            <div className="text-center py-10 text-muted-foreground animate-pulse">Loading requests...</div>
+                        ) : activeSales.length === 0 ? (
+                            <GlassCard className="text-center py-20">
+                                <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <ShoppingBag className="w-8 h-8 text-muted-foreground" />
+                                </div>
+                                <h3 className="text-lg font-medium text-foreground">No Active Requests</h3>
+                                <p className="text-muted-foreground mt-2 mb-6">You don't have any pending purchase requests.</p>
+                                <Link href="/marketplace">
+                                    <Button variant="hero">Browse Marketplace</Button>
+                                </Link>
+                            </GlassCard>
+                        ) : (
+                            <motion.div
+                                variants={containerVariants}
+                                initial="hidden"
+                                animate="visible"
+                                className="grid grid-cols-1 md:grid-cols-2 gap-6"
+                            >
+                                {activeSales.map((sale: any) => {
+                                    const myBids = myBidsPerSale[sale.saleId.toString()] || [];
 
-                                    {/* Show ALL of this user's bids */}
-                                    <div className="space-y-2">
-                                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Your Offers</p>
-                                        {myBids.map((bid: any, idx: number) => {
-                                            const status = getBidStatus(bid, sale);
-                                            const StatusIcon = status.icon;
-                                            const isThisBidAccepted = sale.state === SaleState.AcceptedToABuyer &&
-                                                sale.acceptedFor.toLowerCase() === address?.toLowerCase() &&
-                                                sale.acceptedPrice === bid.priceOffered;
+                                    return (
+                                        <motion.div key={sale.saleId.toString()} variants={itemVariants}>
+                                            <GlassCard hover className="relative overflow-hidden">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div>
+                                                        <h3 className="font-semibold text-lg text-foreground">Sale #{sale.saleId.toString()}</h3>
+                                                        <p className="text-sm text-muted-foreground">Property #{sale.propertyId.toString()}</p>
+                                                    </div>
+                                                </div>
 
-                                            return (
-                                                <div key={idx} className={`p-3 rounded-lg border ${status.borderColor} ${isThisBidAccepted ? 'bg-green-500/10' :
-                                                    status.text === 'Declined' ? 'bg-red-500/5' :
-                                                        'bg-secondary/20'
-                                                    }`}>
-                                                    <div className="space-y-2">
-                                                        <div className="flex justify-between items-center">
-                                                            <EthPriceDisplay 
-                                                                ethAmount={bid.priceOffered}
-                                                                size="sm"
-                                                                layout="inline"
-                                                                emphasize="both"
-                                                            />
-                                                            <span className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${status.color}`}>
-                                                                <StatusIcon className="w-3 h-3" />
-                                                                {status.text}
-                                                            </span>
-                                                        </div>
+                                                <div className="p-3 rounded-lg bg-secondary/30 border border-border/50 mb-3">
+                                                    <p className="text-xs text-muted-foreground mb-1.5">Listed Price</p>
+                                                    <EthPriceDisplay ethAmount={sale.price} size="sm" layout="inline" emphasize="both" />
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Your Offers</p>
+                                                    {myBids.map((bid: any, idx: number) => {
+                                                        const status = getBidStatus(bid, sale);
+                                                        const StatusIcon = status.icon;
+                                                        const isThisBidAccepted = sale.state === SaleState.AcceptedToABuyer &&
+                                                            sale.acceptedFor.toLowerCase() === address?.toLowerCase() &&
+                                                            sale.acceptedPrice === bid.priceOffered;
+
+                                                        return (
+                                                            <div key={idx} className={`p-3 rounded-lg border ${status.borderColor} ${isThisBidAccepted ? 'bg-green-500/10' : 'bg-secondary/20'}`}>
+                                                                <div className="flex justify-between items-center">
+                                                                    <EthPriceDisplay ethAmount={bid.priceOffered} size="sm" layout="inline" emphasize="both" />
+                                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${status.color}`}>
+                                                                        <StatusIcon className="w-3 h-3" />
+                                                                        {status.text}
+                                                                    </span>
+                                                                </div>
+                                                                {isThisBidAccepted && (
+                                                                    <div className="mt-3">
+                                                                        <Button
+                                                                            onClick={() => handlePayment(sale.saleId, sale.acceptedPrice)}
+                                                                            disabled={isConfirming}
+                                                                            variant="hero"
+                                                                            className="w-full bg-green-600 hover:bg-green-700"
+                                                                            size="sm"
+                                                                        >
+                                                                            {isConfirming ? (
+                                                                                <span className="flex items-center gap-2">
+                                                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                                                    Processing...
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="flex items-center gap-2">
+                                                                                    Pay {formatEther(sale.acceptedPrice)} ETH & Claim
+                                                                                    <ArrowRight className="w-4 h-4" />
+                                                                                </span>
+                                                                            )}
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </GlassCard>
+                                        </motion.div>
+                                    );
+                                })}
+                            </motion.div>
+                        )}
+                    </TabsContent>
+
+                    {/* Buy History Tab */}
+                    <TabsContent value="history">
+                        {isLoadingHistory ? (
+                            <div className="text-center py-10 text-muted-foreground animate-pulse">Loading history...</div>
+                        ) : buyHistory.length === 0 ? (
+                            <GlassCard className="text-center py-20">
+                                <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <History className="w-8 h-8 text-muted-foreground" />
+                                </div>
+                                <h3 className="text-lg font-medium text-foreground">No Purchase History</h3>
+                                <p className="text-muted-foreground mt-2 mb-6">You haven't purchased any properties yet.</p>
+                                <Link href="/marketplace">
+                                    <Button variant="hero">Browse Marketplace</Button>
+                                </Link>
+                            </GlassCard>
+                        ) : (
+                            <motion.div
+                                variants={containerVariants}
+                                initial="hidden"
+                                animate="visible"
+                                className="space-y-4"
+                            >
+                                {buyHistory.map((sale: any, idx: number) => (
+                                    <motion.div key={idx} variants={itemVariants}>
+                                        <GlassCard className="p-4">
+                                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <CheckCircle className="w-5 h-5 text-green-500" />
+                                                        <h3 className="font-semibold text-foreground">
+                                                            Property #{sale.propertyId?.toString()}
+                                                        </h3>
+                                                        <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full">
+                                                            Purchased
+                                                        </span>
                                                     </div>
 
-                                                    {/* Pay button only for the ACCEPTED bid */}
-                                                    {isThisBidAccepted && (
-                                                        <div className="mt-3">
-                                                            <Button
-                                                                onClick={() => handlePayment(sale.saleId, sale.acceptedPrice)}
-                                                                disabled={isConfirming}
-                                                                variant="hero"
-                                                                className="w-full bg-green-600 hover:bg-green-700"
-                                                                size="sm"
-                                                            >
-                                                                {isConfirming ? (
-                                                                    <span className="flex items-center gap-2">
-                                                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                                                        Processing...
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="flex items-center gap-2">
-                                                                        Pay {formatEther(sale.acceptedPrice)} ETH & Claim
-                                                                        <ArrowRight className="w-4 h-4" />
-                                                                    </span>
-                                                                )}
-                                                            </Button>
-                                                            <p className="text-xs text-muted-foreground text-center mt-1">
-                                                                Ownership transfers to your wallet immediately
-                                                            </p>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                                        {/* Seller Address */}
+                                                        <div className="p-2 bg-secondary/30 rounded border border-border/50">
+                                                            <p className="text-xs text-muted-foreground mb-1">Seller</p>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="font-mono text-xs break-all">
+                                                                    {sale.owner}
+                                                                </span>
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    className="h-5 w-5"
+                                                                    onClick={() => navigator.clipboard.writeText(sale.owner)}
+                                                                >
+                                                                    <Copy className="w-3 h-3" />
+                                                                </Button>
+                                                            </div>
                                                         </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
 
-                                    {isConfirmed && (
-                                        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
-                                            <div className="text-center p-6 bg-card border border-border rounded-xl shadow-2xl animate-in zoom-in">
-                                                <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                    <CheckCircle className="w-8 h-8 text-green-500" />
+                                                        {/* Purchase Price */}
+                                                        <div className="p-2 bg-secondary/30 rounded border border-border/50">
+                                                            <p className="text-xs text-muted-foreground mb-1">Purchase Price</p>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="font-mono text-sm text-green-400 font-bold">
+                                                                    {formatEther(sale.acceptedPrice)} ETH
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <h3 className="text-xl font-bold text-foreground">Success!</h3>
-                                                <p className="text-muted-foreground mt-1">Ownership transferred.</p>
-                                                <Button
-                                                    variant="outline"
-                                                    className="mt-4"
-                                                    onClick={() => window.location.reload()}
-                                                >
-                                                    Close
-                                                </Button>
+
+                                                <Link href={`/property/${sale.propertyId?.toString()}`}>
+                                                    <Button variant="outline" size="sm">
+                                                        View Property <ExternalLink className="w-3 h-3 ml-2" />
+                                                    </Button>
+                                                </Link>
                                             </div>
-                                        </div>
-                                    )}
-                                </GlassCard>
+                                        </GlassCard>
+                                    </motion.div>
+                                ))}
                             </motion.div>
-                        );
-                    })}
-                </motion.div>
-            )}
+                        )}
+                    </TabsContent>
+                </Tabs>
 
-            {writeError && (
-                <div className="fixed bottom-8 right-8 p-4 bg-destructive text-destructive-foreground rounded-lg shadow-lg max-w-sm z-50 animate-in slide-in-from-bottom">
-                    <h4 className="font-bold mb-1">Payment Error</h4>
-                    <p className="text-sm">{writeError.message.split('\n')[0].slice(0, 150)}...</p>
-                </div>
-            )}
-        </DashboardLayout>
-    </StaffRouteGuard>
+                {isConfirmed && (
+                    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+                        <div className="text-center p-6 bg-card border border-border rounded-xl shadow-2xl animate-in zoom-in">
+                            <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <CheckCircle className="w-8 h-8 text-green-500" />
+                            </div>
+                            <h3 className="text-xl font-bold text-foreground">Success!</h3>
+                            <p className="text-muted-foreground mt-1">Ownership transferred.</p>
+                            <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+                                Close
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {writeError && (
+                    <div className="fixed bottom-8 right-8 p-4 bg-destructive text-destructive-foreground rounded-lg shadow-lg max-w-sm z-50 animate-in slide-in-from-bottom">
+                        <h4 className="font-bold mb-1">Payment Error</h4>
+                        <p className="text-sm">{writeError.message.split('\n')[0].slice(0, 150)}...</p>
+                    </div>
+                )}
+            </DashboardLayout>
+        </StaffRouteGuard>
     );
 }
+

@@ -13,13 +13,13 @@ import { Plus, MessageSquare, Hash } from "lucide-react";
 export default function GlobalChatPage() {
     const { address } = useAccount();
     const { ipfs, orbitdb, isReady, error: ipfsError, broadcastAnnouncement, reconnect } = useIPFS();
-    
+
     // UI State
     const [activeContact, setActiveContact] = useState<string | null>(null);
     const [contacts, setContacts] = useState<string[]>([]);
     const [pendingRequests, setPendingRequests] = useState<string[]>([]);
     const [newContactInput, setNewContactInput] = useState("");
-    
+
     // Chat State
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [database, setDatabase] = useState<any>(null);
@@ -74,7 +74,7 @@ export default function GlobalChatPage() {
                     if (val.to?.toLowerCase() === address.toLowerCase()) {
                         const sender = val.from;
                         console.log("Found Message Request from:", sender);
-                        
+
                         if (activeContact?.toLowerCase() === sender?.toLowerCase()) return;
 
                         setContacts(current => {
@@ -96,11 +96,11 @@ export default function GlobalChatPage() {
 
                 // 1. Load existing history
                 for await (const entry of db.iterator({ limit: -1 })) {
-                     processPing(entry);
+                    processPing(entry);
                 }
 
                 // 2. Listen for new pings (Replication)
-                 db.events.on('replicated', async () => {
+                db.events.on('replicated', async () => {
                     console.log("Discovery DB Replicated - Checking for new pings...");
                     for await (const entry of db.iterator({ limit: 5 })) { // Check recent
                         processPing(entry);
@@ -174,7 +174,7 @@ export default function GlobalChatPage() {
         const connect = async () => {
             try {
                 // Timeout promise to prevent infinite hanging
-                const timeoutPromise = new Promise((_, reject) => 
+                const timeoutPromise = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error("Connection timeout")), 15000)
                 );
 
@@ -184,9 +184,9 @@ export default function GlobalChatPage() {
                 });
 
                 const db = await Promise.race([openDbPromise, timeoutPromise]) as any;
-                
+
                 if (!isMounted) return;
-                
+
                 setDatabase(db);
                 setStatus('synced');
                 console.log(`Connected to DM: ${id}`);
@@ -208,19 +208,19 @@ export default function GlobalChatPage() {
                         } catch (iterErr) {
                             console.warn("Corrupt entry skipped:", iterErr);
                         }
-                        
+
                         if (isMounted) {
                             setMessages(current => {
                                 // 1. If remote is empty (MemoryStore reset), keep local history
                                 if (loaded.length === 0 && current.length > 0) {
                                     return current;
                                 }
-                                
+
                                 // 2. If remote has data, merge with local to avoid duplicates
                                 // Map by hash or timestamp+sender+content collision check
                                 const existingHashes = new Set(current.map(m => m.hash || `${m.timestamp}-${m.sender}-${m.content}`));
                                 const merged = [...current];
-                                
+
                                 loaded.forEach(msg => {
                                     const key = msg.hash || `${msg.timestamp}-${msg.sender}-${msg.content}`;
                                     if (!existingHashes.has(key)) {
@@ -228,7 +228,7 @@ export default function GlobalChatPage() {
                                         existingHashes.add(key);
                                     }
                                 });
-                                
+
                                 // Sort by timestamp
                                 return merged.sort((a, b) => a.timestamp - b.timestamp);
                             });
@@ -241,7 +241,7 @@ export default function GlobalChatPage() {
                 await loadMessages();
 
                 db.events.on('replicated', async () => {
-                   await loadMessages();
+                    await loadMessages();
                 });
 
                 // ALSO: Listen for 'write' events (my own writes from other tabs)
@@ -278,15 +278,15 @@ export default function GlobalChatPage() {
     const addContact = async (contactStr?: string) => {
         const target = contactStr || newContactInput.trim();
         if (!target) return;
-        
+
         // Basic eth address validation could go here
-        
+
         if (!contacts.includes(target)) {
             const updated = [...contacts, target];
             setContacts(updated);
             localStorage.setItem(`divflow-contacts-${address?.toLowerCase()}`, JSON.stringify(updated));
         }
-        
+
         // Remove from pending if there
         if (pendingRequests.includes(target)) {
             setPendingRequests(prev => prev.filter(c => c !== target));
@@ -294,7 +294,7 @@ export default function GlobalChatPage() {
 
         setNewContactInput("");
         setActiveContact(target);
-        
+
         // Send initial ping
         await sendPing(target);
     };
@@ -307,14 +307,14 @@ export default function GlobalChatPage() {
 
     const sendMessage = async (text: string) => {
         if (!text.trim() || !database) return;
-        
+
         try {
             const msg = {
                 sender: address,
                 content: text,
                 timestamp: Date.now()
             };
-            
+
             // 1. Add to local OrbitDB (This persists locally)
             try {
                 await database.add(msg);
@@ -325,7 +325,7 @@ export default function GlobalChatPage() {
                 }
                 console.warn("Offline Send: Message saved locally, waiting for sync.");
             }
-            
+
             // 2. Send Discovery Ping (Best Effort)
             try {
                 if (activeContact) await sendPing(activeContact);
@@ -352,42 +352,25 @@ export default function GlobalChatPage() {
     return (
         <DashboardLayout>
             <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-120px)]">
-                
+
                 {/* Sidebar */}
                 <GlassCard className="w-full md:w-80 flex flex-col p-4 border-r border-white/10">
                     <div className="mb-6 space-y-4">
-                        
+
                         {/* Status Header */}
                         <div className="flex justify-between items-center">
                             <h2 className="font-bold text-sm">Global Chat</h2>
                             <div className="flex items-center gap-2">
-                                {/* Network Status / Reconnect */}
-                                {peerCount === 0 && (
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        className="h-5 text-[10px] px-2 bg-red-500/10 border-red-500/50 text-red-500 hover:bg-red-500/20"
-                                        onClick={() => {
-                                            if (reconnect) reconnect();
-                                        }}
-                                    >
-                                       Offline (Retry)
-                                    </Button>
-                                )}
-
                                 <div className="text-xs flex items-center gap-2">
-                                     <span className="text-muted-foreground text-[10px] bg-secondary/50 px-2 py-0.5 rounded-full">
-                                        Peers: {peerCount}
-                                     </span>
-                                     <span className={`w-2 h-2 rounded-full ${(!isReady) ? 'bg-orange-500 animate-pulse' : status === 'synced' ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                                    <span className={`w-2 h-2 rounded-full ${(!isReady) ? 'bg-orange-500 animate-pulse' : status === 'synced' ? 'bg-green-500' : 'bg-yellow-500'}`} />
                                 </div>
                             </div>
                         </div>
 
                         {/* Add Contact */}
                         <div className="flex gap-2">
-                            <Input 
-                                placeholder="0x... Address" 
+                            <Input
+                                placeholder="0x... Address"
                                 className="h-8 text-xs font-mono"
                                 value={newContactInput}
                                 onChange={(e) => setNewContactInput(e.target.value)}
@@ -401,25 +384,25 @@ export default function GlobalChatPage() {
                     {/* Pending Requests */}
                     {pendingRequests.length > 0 && (
                         <div className="mb-4">
-                           <h3 className="text-xs text-muted-foreground mb-2 flex items-center justify-between">
-                               New Requests
-                               <span className="bg-orange-500 text-white text-[10px] px-1.5 rounded-full">{pendingRequests.length}</span>
-                           </h3>
-                           <div className="space-y-2">
-                               {pendingRequests.map(req => (
-                                   <div key={req} className="flex items-center justify-between p-2 bg-white/5 rounded-lg text-xs">
-                                       <span className="font-mono truncate w-24">{req.slice(0,6)}...{req.slice(-4)}</span>
-                                       <Button size="sm" className="h-6 text-[10px]" onClick={() => addContact(req)}>Accept</Button>
-                                   </div>
-                               ))}
-                           </div>
+                            <h3 className="text-xs text-muted-foreground mb-2 flex items-center justify-between">
+                                New Requests
+                                <span className="bg-orange-500 text-white text-[10px] px-1.5 rounded-full">{pendingRequests.length}</span>
+                            </h3>
+                            <div className="space-y-2">
+                                {pendingRequests.map(req => (
+                                    <div key={req} className="flex items-center justify-between p-2 bg-white/5 rounded-lg text-xs">
+                                        <span className="font-mono truncate w-24">{req.slice(0, 6)}...{req.slice(-4)}</span>
+                                        <Button size="sm" className="h-6 text-[10px]" onClick={() => addContact(req)}>Accept</Button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
 
                     {/* Contacts List */}
                     <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
                         {contacts.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">No contacts yet.</p>}
-                        
+
                         {contacts.map(contact => (
                             <button
                                 key={contact}
@@ -432,12 +415,12 @@ export default function GlobalChatPage() {
                                     <Hash className="w-4 h-4 text-gray-400" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium font-mono truncate">{contact.slice(0,6)}...{contact.slice(-4)}</p>
+                                    <p className="text-sm font-medium font-mono truncate">{contact.slice(0, 6)}...{contact.slice(-4)}</p>
                                     <p className="text-[10px] text-muted-foreground truncate">
                                         {activeContact === contact ? 'Active' : 'Click to chat'}
                                     </p>
                                 </div>
-                                
+
                                 {/* Red Dot for Unread from Existing Contacts */}
                                 {unread.includes(contact) && (
                                     <span className="absolute right-2 top-3 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
@@ -450,14 +433,14 @@ export default function GlobalChatPage() {
                 {/* Main Chat Window */}
                 <div className="flex-1 min-w-0 h-full">
                     {activeContact ? (
-                        <ChatWindow 
+                        <ChatWindow
                             messages={messages}
                             currentUserAddress={address || ''}
                             onSendMessage={sendMessage}
                             status={status}
                             isLoading={status === 'connecting' || !isReady}
                             error={status === 'error' ? "Connection Failed" : null}
-                            placeholder={`Message ${activeContact?.slice(0,6)}...`}
+                            placeholder={`Message ${activeContact?.slice(0, 6)}...`}
                         />
                     ) : (
                         <GlassCard className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">
