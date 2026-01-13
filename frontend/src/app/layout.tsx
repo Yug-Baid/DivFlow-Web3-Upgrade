@@ -7,6 +7,12 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "DivFlow | Decentralized Land Registry",
   description: "Secure, Transparent, and Efficient Land Registration on Blockchain",
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/favicon.svg',
+  },
 };
 
 import { Providers } from "./providers";

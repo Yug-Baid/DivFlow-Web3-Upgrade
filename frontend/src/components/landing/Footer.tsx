@@ -27,11 +27,11 @@ export const Footer = () => {
                 <MapPin className="w-5 h-5 text-primary-foreground" />
               </div>
               <span className="text-xl font-bold tracking-tight">
-                Land<span className="text-gradient">Chain</span>
+                Div<span className="text-gradient">Flow</span>
               </span>
             </Link>
             <p className="text-muted-foreground mb-6 max-w-sm leading-relaxed">
-              The future of property ownership. Secure, transparent, and 
+              The future of property ownership. Secure, transparent, and
               decentralized land registry on the blockchain.
             </p>
             <div className="flex gap-4">
@@ -71,7 +71,7 @@ export const Footer = () => {
         {/* Bottom */}
         <div className="border-t border-border/50 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-muted-foreground text-sm">
-            © 2024 LandChain. All rights reserved.
+            © 2024 DivFlow. All rights reserved.
           </p>
           <p className="text-muted-foreground text-sm">
             Built with ❤️ for the decentralized future

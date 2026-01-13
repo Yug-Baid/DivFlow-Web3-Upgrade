@@ -11,7 +11,7 @@ const navLinks = [
   { label: "Features", href: "#features" },
   { label: "How It Works", href: "#how-it-works" },
   { label: "Security", href: "#security" },
-   { label: "Privacy", href: "#privacy" },
+  { label: "Privacy", href: "#privacy" },
 ];
 
 export const Navbar = () => {
@@ -32,12 +32,12 @@ export const Navbar = () => {
               <MapPin className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold tracking-tight">
-              Land<span className="text-gradient">Chain</span>
+              Div<span className="text-gradient">Flow</span>
             </span>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-10" style={{marginLeft: "150px"}}>
+          <div className="hidden md:flex items-center gap-10" style={{ marginLeft: "150px" }}>
             {navLinks.map((link) => (
               <a
                 key={link.label}
@@ -51,11 +51,11 @@ export const Navbar = () => {
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center gap-4">
-             <WalletConnect />
+            <WalletConnect dropdownPosition="down" />
             <Link href="/dashboard">
-                <Button variant="hero" size="sm">
+              <Button variant="hero" size="sm">
                 Launch App
-                </Button>
+              </Button>
             </Link>
           </div>
 
@@ -88,11 +88,11 @@ export const Navbar = () => {
                 </a>
               ))}
               <div className="flex flex-col gap-3 pt-4">
-                 <WalletConnect />
-                 <Link href="/dashboard" className="w-full">
-                    <Button variant="hero" size="sm" className="w-full">
+                <WalletConnect dropdownPosition="down" />
+                <Link href="/dashboard" className="w-full">
+                  <Button variant="hero" size="sm" className="w-full">
                     Launch App
-                    </Button>
+                  </Button>
                 </Link>
               </div>
             </div>

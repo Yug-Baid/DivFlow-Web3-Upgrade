@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
+import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
 import { LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
 import { useState, useEffect, useMemo } from "react";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
@@ -39,7 +39,6 @@ export default function InspectorDashboard() {
     const [resolvedMetadata, setResolvedMetadata] = useState<Record<string, PropertyMetadata | string>>({});
     const [historyLogs, setHistoryLogs] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-    const [revenueEmployees, setRevenueEmployees] = useState<Record<string, string>>({});
     const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
 
     useEffect(() => {
@@ -96,7 +95,23 @@ export default function InspectorDashboard() {
         (properties as any[])?.filter((p: any) => p.state === 0) || [],
         [properties]);
 
-    // Resolve Metadata and Fetch Revenue Employees
+    // Fetch Revenue Employees for each property's department using useReadContracts (batch query)
+    const revenueEmployeeQueries = useMemo(() =>
+        pendingProperties.map((property: any) => ({
+            address: LAND_REGISTRY_ADDRESS as `0x${string}`,
+            abi: LAND_REGISTRY_ABI,
+            functionName: "revenueDeptIdToEmployee",
+            args: [property.revenueDepartmentId],
+        })),
+        [pendingProperties]
+    );
+
+    const { data: revenueEmployeeResults } = useReadContracts({
+        contracts: revenueEmployeeQueries,
+        query: { enabled: pendingProperties.length > 0 },
+    });
+
+    // Resolve Metadata (separate effect for IPFS)
     useEffect(() => {
         pendingProperties.forEach(async (p: any) => {
             const hash = p.ipfsHash;
@@ -109,112 +124,8 @@ export default function InspectorDashboard() {
                     setResolvedMetadata(prev => ({ ...prev, [hash]: data }));
                 }
             }
-
-            // Fetch Revenue Employee for this property's Dept ID
-            /* Assuming property has revenueDepartmentId not shown in struct, but typical flow:
-               We need to know which Dept is responsible. 
-               The contract stores `locationId`. 
-               Wait, LandRegistry struct:
-                struct Land {
-                    uint256 propertyId;
-                    address owner;
-                    uint256 locationId; // Region Code
-                    uint256 surveyNumber;
-                    uint256 area;
-                    uint256 price;
-                    bool isRegistered;
-                    LandState state;
-                    string ipfsHash;
-                }
-               It does NOT have revenueDepartmentId directly in frontend usually unless stored.
-               But `getPropertiesByLocation` returns `Land[]`.
-               Wait, typically Inspector verifies -> Assigned to Revenue?
-               There is NO link in `Land` struct to Revenue Dept currently visible in recent edits.
-               However, `revenueDeptIdToEmployee` exists.
-               How do we know which Dept calls it?
-               Maybe it's based on Location? Or assigned manually?
-               In `register-land`, user enters nothing about revenue dept.
-               The user said "Show Revenue Department Employees Address".
-               If there is no direct link, I might have to assume a default or fetch from a mapping if exists.
-               Let's check `LandRegistry.sol` if I can? Or just assume `location` maps to `dept`?
-               Actually, in `revenue/page.tsx`, we fetch properties by `REVENUE_DEPT_ID`.
-               Function `getPropertiesByRevenueDeptId(deptId)`.
-               This implies properties ARE assigned to a Dept ID.
-               Let's check where `revenueDeptId` comes from.
-               Ah, I see `Land` struct in `inspector` might be missing fields in `pendingProperties` filter?
-               Let's look at `LandRegistry.sol` if possible, or assume it's there.
-               Using `publicClient` to read `landLocationToRevenueDept(locationId)` if it exists?
-               Or `Region` struct?
-               
-               Let's assume for now I cannot easily find it without `LandRegistry` source. 
-               But wait, the User wants me to show it.
-               The previous `revenue/page.tsx` reads properties by DeptID.
-               This means `Land` struct likely has it, or there is a mapping.
-               
-               Let's TRY to read `getRevenueDeptByLocation(locationId)`?
-               If not, I will just display "Pending Assignment" if I can't find it.
-               
-               Actually, I will try to read `inspector/page.tsx` again.
-               In `inspector/page.tsx`, we have properties.
-               Let's assume there's a way.
-               
-               Wait, I'll just use the `publicClient` to fetch `getRevenueDeptForLocation(locationId)` if it exists?
-               Or just assume a static one for Hackathon?
-               
-               Let's look at `revenue/page.tsx`:
-               It calls `getPropertiesByRevenueDeptId`.
-               
-               If I can't find the link, I will skip fetching and just show "Revenue Dept" placeholder?
-               No, user said "show address".
-               
-               Let's guess: `locationId` -> `revenueDeptId`?
-               
-               Let's assume I can read the mapped employee for the DEFAULT dept (101) or iterate.
-               
-               Actually, let's use `publicClient` to check `revenueDeptIdToEmployee(101)` as a fallback?
-               
-               Better: I will check `LandRegistry` ABI using `view_file` on `src/lib/contracts.ts` (if available) or `src/lib/abi`.
-               I don't have ABI file easily readable here (it's imported).
-               
-               I will try to fetch `revenueDeptIdToEmployee` for the `property.locationId` (assuming locationId == deptId for simplicity? likely not).
-               
-               Let's look at `inspector/page.tsx` again.
-               
-               New Plan:
-               Since I don't have the explicit link in frontend code yet, I will add a placeholder "Revenue Dept: [Fetch Error]" if fails, but I will try `publicClient` to read `revenueDeptIdToEmployee(property.locationId)` just in case location maps to dept ID 1:1, OR
-               I will simply fetch `revenueDeptIdToEmployee(101)` and display it as "Central Revenue" for now, updating later.
-               
-               Actually, I'll try to find the `LandRegistry.sol`?
-               I don't have access to backend files.
-               
-               I will assume `locationId` might act as `deptId` for simplicity in this demo, or I will just not show it if undefined.
-               
-               Wait, I can use `publicClient` to call `getRevenueDept(locationId)`.
-               
-               Let's just fetch `revenueDeptIdToEmployee(101)` and label it "Assigned Revenue Officer (Default)"?
-               The user said "show revenue department employees address".
-               
-               I'll add the code to fetch but wrap in try/catch.
-            */
-
-            // Use property's revenueDepartmentId to fetch assigned revenue employee
-            try {
-                if (!publicClient) return;
-                const deptId = p.revenueDepartmentId;
-                const emp = await publicClient.readContract({
-                    address: LAND_REGISTRY_ADDRESS,
-                    abi: LAND_REGISTRY_ABI,
-                    functionName: 'revenueDeptIdToEmployee',
-                    args: [deptId]
-                }) as string;
-
-                if (emp && emp !== '0x0000000000000000000000000000000000000000') {
-                    setRevenueEmployees(prev => ({ ...prev, [p.propertyId.toString()]: emp }));
-                }
-            } catch (e) { console.error(e); }
-
         });
-    }, [pendingProperties, publicClient]);
+    }, [pendingProperties]);
 
     // Fetch History Logs
     const fetchHistory = async () => {
@@ -376,8 +287,13 @@ export default function InspectorDashboard() {
                         </GlassCard>
                     ) : (
                         <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {pendingProperties.map((property: any) => {
+                            {pendingProperties.map((property: any, idx: number) => {
                                 const meta = getMetadata(property.ipfsHash);
+                                // Get revenue employee from batch query results
+                                const revenueEmployee = revenueEmployeeResults?.[idx]?.status === 'success'
+                                    ? revenueEmployeeResults[idx].result as string
+                                    : null;
+                                const isValidRevEmployee = revenueEmployee && revenueEmployee !== '0x0000000000000000000000000000000000000000';
 
                                 return (
                                     <motion.div key={property.propertyId.toString()} variants={itemVariants}>
@@ -437,14 +353,14 @@ export default function InspectorDashboard() {
                                                     <span className="text-blue-400 text-xs uppercase font-semibold">Revenue Officer</span>
                                                     <div className="flex items-center gap-1">
                                                         <span className="font-mono text-xs break-all max-w-[180px]">
-                                                            {revenueEmployees[property.propertyId.toString()] || "Assigning..."}
+                                                            {isValidRevEmployee ? `${revenueEmployee.slice(0, 6)}...${revenueEmployee.slice(-4)}` : "Not Assigned"}
                                                         </span>
-                                                        {revenueEmployees[property.propertyId.toString()] && (
+                                                        {isValidRevEmployee && (
                                                             <Button
                                                                 size="icon"
                                                                 variant="ghost"
                                                                 className="h-5 w-5 shrink-0"
-                                                                onClick={() => navigator.clipboard.writeText(revenueEmployees[property.propertyId.toString()])}
+                                                                onClick={() => navigator.clipboard.writeText(revenueEmployee)}
                                                             >
                                                                 <Copy className="w-3 h-3" />
                                                             </Button>
