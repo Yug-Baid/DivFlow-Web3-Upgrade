@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { ShieldCheck, UserPlus, Building, AlertTriangle, CheckCircle, ShieldX, MapPin, Users } from "lucide-react";
 
 // Contract owner address - Anvil account 0 (deployer)
-const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const ADMIN_ADDRESS = "0xA3547d22cBc90a88e89125eE360887Ee7C30a9d5";
 
 export default function AdminPage() {
     const { address, isConnected } = useAccount();

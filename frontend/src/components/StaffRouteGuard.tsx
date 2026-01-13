@@ -10,7 +10,7 @@ import { GlassCard } from "@/components/shared/GlassCard";
 import Link from "next/link";
 
 // Admin address for role detection
-const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const ADMIN_ADDRESS = "0xA3547d22cBc90a88e89125eE360887Ee7C30a9d5";
 
 interface StaffRouteGuardProps {
   children: ReactNode;

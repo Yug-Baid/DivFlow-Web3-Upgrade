@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount, useReadContract, usePublicClient } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI, TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI } from "@/lib/contracts";
+import { fetchHistoryEvents, DEPLOYMENT_BLOCK } from "@/lib/historyClient";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -39,10 +40,10 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
   const propertyId = BigInt(params.id);
   const router = useRouter();
   const { address } = useAccount();
-  const publicClient = usePublicClient();
   const [isMounted, setIsMounted] = useState(false);
   const [metadata, setMetadata] = useState<PropertyMetadata | null>(null);
   const [historyEvents, setHistoryEvents] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -79,51 +80,43 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
     }
   }, [property, propertyId]);
 
-  // Fetch History
+  // Fetch History using dedicated history client (avoids Alchemy rate limits)
   useEffect(() => {
     const fetchHistory = async () => {
-      if (!publicClient) return;
-
+      setIsLoadingHistory(true);
       try {
-        const addedLogs = await publicClient.getContractEvents({
-          address: LAND_REGISTRY_ADDRESS,
-          abi: LAND_REGISTRY_ABI,
-          eventName: 'LandAdded',
-          args: { propertyId: propertyId },
-          fromBlock: 'earliest'
-        });
-
-        const verifiedLogs = await publicClient.getContractEvents({
-          address: LAND_REGISTRY_ADDRESS,
-          abi: LAND_REGISTRY_ABI,
-          eventName: 'PropertyVerifiedByInspector',
-          args: { propertyId: propertyId },
-          fromBlock: 'earliest'
-        });
-
-        const saleApprovedLogs = await publicClient.getContractEvents({
-          address: LAND_REGISTRY_ADDRESS,
-          abi: LAND_REGISTRY_ABI,
-          eventName: 'SaleRequestApproved',
-          args: { propertyId: propertyId },
-          fromBlock: 'earliest'
-        });
-
-        const listedLogs = await publicClient.getContractEvents({
-          address: TRANSFER_OWNERSHIP_ADDRESS,
-          abi: TRANSFER_OWNERSHIP_ABI,
-          eventName: 'PropertyOnSale',
-          args: { propertyId: propertyId },
-          fromBlock: 'earliest'
-        });
-
-        const soldLogs = await publicClient.getContractEvents({
-          address: TRANSFER_OWNERSHIP_ADDRESS,
-          abi: TRANSFER_OWNERSHIP_ABI,
-          eventName: 'OwnershipTransferred',
-          args: { propertyId: propertyId },
-          fromBlock: 'earliest'
-        });
+        const [addedLogs, verifiedLogs, saleApprovedLogs, listedLogs, soldLogs] = await Promise.all([
+          fetchHistoryEvents(
+            LAND_REGISTRY_ADDRESS,
+            LAND_REGISTRY_ABI,
+            'LandAdded',
+            { propertyId: propertyId }
+          ),
+          fetchHistoryEvents(
+            LAND_REGISTRY_ADDRESS,
+            LAND_REGISTRY_ABI,
+            'PropertyVerifiedByInspector',
+            { propertyId: propertyId }
+          ),
+          fetchHistoryEvents(
+            LAND_REGISTRY_ADDRESS,
+            LAND_REGISTRY_ABI,
+            'SaleRequestApproved',
+            { propertyId: propertyId }
+          ),
+          fetchHistoryEvents(
+            TRANSFER_OWNERSHIP_ADDRESS,
+            TRANSFER_OWNERSHIP_ABI,
+            'PropertyOnSale',
+            { propertyId: propertyId }
+          ),
+          fetchHistoryEvents(
+            TRANSFER_OWNERSHIP_ADDRESS,
+            TRANSFER_OWNERSHIP_ABI,
+            'OwnershipTransferred',
+            { propertyId: propertyId }
+          ),
+        ]);
 
         const events = [
           ...addedLogs.map(l => ({ type: 'Property Registered', block: l.blockNumber, tx: l.transactionHash })),
@@ -137,11 +130,13 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
         setHistoryEvents(events);
       } catch (e) {
         console.error("Error fetching history:", e);
+        setHistoryEvents([]);
       }
+      setIsLoadingHistory(false);
     };
 
     fetchHistory();
-  }, [publicClient, propertyId]);
+  }, [propertyId]);
 
   if (!isMounted || isLoadingProperty) {
     return (

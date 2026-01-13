@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
+import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+import { fetchHistoryEvents } from "@/lib/historyClient";
 import { formatEther, parseEther } from "viem";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -16,18 +17,18 @@ import DynamicMap from "@/components/shared/DynamicMap";
 import { UserInfoModal } from "@/components/UserInfoModal";
 
 // Admin address 
-const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const ADMIN_ADDRESS = "0xA3547d22cBc90a88e89125eE360887Ee7C30a9d5";
 
 export default function PropertyDetailsPage({ params }: { params: { id: string } }) {
     const propertyId = BigInt(params.id);
     const router = useRouter();
     const { address } = useAccount();
-    const publicClient = usePublicClient();
     const [isMounted, setIsMounted] = useState(false);
     const [metadata, setMetadata] = useState<PropertyMetadata | null>(null);
     const [offerPrice, setOfferPrice] = useState("");
     const [selectedUserAddress, setSelectedUserAddress] = useState<string | null>(null);
     const [historyEvents, setHistoryEvents] = useState<any[]>([]);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
     useEffect(() => {
         setIsMounted(true);
@@ -80,78 +81,63 @@ export default function PropertyDetailsPage({ params }: { params: { id: string }
     }, [property, propertyId]);
 
 
-    // FETCH HISTORY LOGS
+    // FETCH HISTORY LOGS using dedicated history client (avoids Alchemy rate limits)
     useEffect(() => {
         const fetchHistory = async () => {
-            if (!publicClient) return;
-
+            setIsLoadingHistory(true);
             try {
-                // 1. Registered (LandAdded)
-                const addedLogs = await publicClient.getContractEvents({
-                    address: LAND_REGISTRY_ADDRESS,
-                    abi: LAND_REGISTRY_ABI,
-                    eventName: 'LandAdded',
-                    args: { propertyId: propertyId },
-                    fromBlock: 'earliest'
-                });
+                const [addedLogs, verifiedLogs, saleApprovedLogs, listedLogs, soldLogs] = await Promise.all([
+                    fetchHistoryEvents(
+                        LAND_REGISTRY_ADDRESS,
+                        LAND_REGISTRY_ABI,
+                        'LandAdded',
+                        { propertyId: propertyId }
+                    ),
+                    fetchHistoryEvents(
+                        LAND_REGISTRY_ADDRESS,
+                        LAND_REGISTRY_ABI,
+                        'PropertyVerifiedByInspector',
+                        { propertyId: propertyId }
+                    ),
+                    fetchHistoryEvents(
+                        LAND_REGISTRY_ADDRESS,
+                        LAND_REGISTRY_ABI,
+                        'SaleRequestApproved',
+                        { propertyId: propertyId }
+                    ),
+                    fetchHistoryEvents(
+                        TRANSFER_OWNERSHIP_ADDRESS,
+                        TRANSFER_OWNERSHIP_ABI,
+                        'PropertyOnSale',
+                        { propertyId: propertyId }
+                    ),
+                    fetchHistoryEvents(
+                        TRANSFER_OWNERSHIP_ADDRESS,
+                        TRANSFER_OWNERSHIP_ABI,
+                        'OwnershipTransferred',
+                        { propertyId: propertyId }
+                    ),
+                ]);
 
-                // 2. Verified (PropertyVerifiedByInspector)
-                const verifiedLogs = await publicClient.getContractEvents({
-                    address: LAND_REGISTRY_ADDRESS,
-                    abi: LAND_REGISTRY_ABI,
-                    eventName: 'PropertyVerifiedByInspector',
-                    args: { propertyId: propertyId },
-                    fromBlock: 'earliest'
-                });
-
-                // 3. Approved for Sale (SaleRequestApproved)
-                const saleApprovedLogs = await publicClient.getContractEvents({
-                    address: LAND_REGISTRY_ADDRESS,
-                    abi: LAND_REGISTRY_ABI,
-                    eventName: 'SaleRequestApproved',
-                    args: { propertyId: propertyId },
-                    fromBlock: 'earliest'
-                });
-
-                // 4. Listed on Marketplace (PropertyOnSale - from Transfer Contract)
-                const listedLogs = await publicClient.getContractEvents({
-                    address: TRANSFER_OWNERSHIP_ADDRESS,
-                    abi: TRANSFER_OWNERSHIP_ABI,
-                    eventName: 'PropertyOnSale',
-                    args: { propertyId: propertyId },
-                    fromBlock: 'earliest'
-                });
-
-                // 5. Sold / Ownership Transferred (OwnershipTransferred - from Transfer Contract)
-                const soldLogs = await publicClient.getContractEvents({
-                    address: TRANSFER_OWNERSHIP_ADDRESS,
-                    abi: TRANSFER_OWNERSHIP_ABI,
-                    eventName: 'OwnershipTransferred',
-                    args: { propertyId: propertyId },
-                    fromBlock: 'earliest'
-                });
-
-                // Merge and formatting
                 const events = [
-                    ...addedLogs.map(l => ({ type: 'Property Registered', block: l.blockNumber, tx: l.transactionHash })),
-                    ...verifiedLogs.map(l => ({ type: 'Verified by Inspector', block: l.blockNumber, tx: l.transactionHash })),
-                    ...saleApprovedLogs.map(l => ({ type: 'Sale Approved by Revenue Dept', block: l.blockNumber, tx: l.transactionHash })),
-                    ...listedLogs.map(l => ({ type: 'Sale Request Submitted', block: l.blockNumber, tx: l.transactionHash })),
-                    ...soldLogs.map(l => ({ type: 'Ownership Transferred', block: l.blockNumber, tx: l.transactionHash })),
+                    ...addedLogs.map((l: any) => ({ type: 'Property Registered', block: l.blockNumber, tx: l.transactionHash })),
+                    ...verifiedLogs.map((l: any) => ({ type: 'Verified by Inspector', block: l.blockNumber, tx: l.transactionHash })),
+                    ...saleApprovedLogs.map((l: any) => ({ type: 'Sale Approved by Revenue Dept', block: l.blockNumber, tx: l.transactionHash })),
+                    ...listedLogs.map((l: any) => ({ type: 'Sale Request Submitted', block: l.blockNumber, tx: l.transactionHash })),
+                    ...soldLogs.map((l: any) => ({ type: 'Ownership Transferred', block: l.blockNumber, tx: l.transactionHash })),
                 ];
 
-                // Sort by block number (descending for history timeline usually, or ascending)
-                // Let's do Descending (newest first)
                 events.sort((a, b) => Number(b.block) - Number(a.block));
                 setHistoryEvents(events);
-
             } catch (e) {
                 console.error("Error fetching history:", e);
+                setHistoryEvents([]);
             }
+            setIsLoadingHistory(false);
         };
 
         fetchHistory();
-    }, [publicClient, propertyId]);
+    }, [propertyId]);
 
 
     // Purchase Logic
