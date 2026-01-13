@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
 import { LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+import { fetchHistoryEvents } from "@/lib/historyClient";
 import { useState, useEffect, useMemo } from "react";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
@@ -127,38 +128,37 @@ export default function InspectorDashboard() {
         });
     }, [pendingProperties]);
 
-    // Fetch History Logs
+    // Fetch History Logs using dedicated history client
     const fetchHistory = async () => {
-        if (!publicClient || !address || !isAuthorized) return;
+        if (!address || !isAuthorized) return;
         setIsLoadingHistory(true);
         try {
-            // Fetch Verify/Reject events for this inspector
-            // Fetch ALL Verify/Reject events and filter in JS to be safe
-            const verified = await publicClient.getContractEvents({
-                address: LAND_REGISTRY_ADDRESS,
-                abi: LAND_REGISTRY_ABI,
-                eventName: 'PropertyVerifiedByInspector',
-                fromBlock: 'earliest'
-            });
-            const rejected = await publicClient.getContractEvents({
-                address: LAND_REGISTRY_ADDRESS,
-                abi: LAND_REGISTRY_ABI,
-                eventName: 'PropertyRejectedByInspector',
-                fromBlock: 'earliest'
-            });
+            const [verified, rejected] = await Promise.all([
+                fetchHistoryEvents(
+                    LAND_REGISTRY_ADDRESS,
+                    LAND_REGISTRY_ABI,
+                    'PropertyVerifiedByInspector'
+                ),
+                fetchHistoryEvents(
+                    LAND_REGISTRY_ADDRESS,
+                    LAND_REGISTRY_ABI,
+                    'PropertyRejectedByInspector'
+                ),
+            ]);
 
             // Filter by inspector address in JS
-            const myVerified = verified.filter(l => (l.args as any).inspector?.toString().toLowerCase() === address.toLowerCase());
-            const myRejected = rejected.filter(l => (l.args as any).inspector?.toString().toLowerCase() === address.toLowerCase());
+            const myVerified = verified.filter((l: any) => (l.args as any).inspector?.toString().toLowerCase() === address.toLowerCase());
+            const myRejected = rejected.filter((l: any) => (l.args as any).inspector?.toString().toLowerCase() === address.toLowerCase());
 
             const logs = [
-                ...myVerified.map(l => ({ type: 'Verified', ...l })),
-                ...myRejected.map(l => ({ type: 'Rejected', ...l }))
-            ].sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber)); // Newest first
+                ...myVerified.map((l: any) => ({ type: 'Verified', ...l })),
+                ...myRejected.map((l: any) => ({ type: 'Rejected', ...l }))
+            ].sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber));
 
             setHistoryLogs(logs);
         } catch (e) {
             console.error("History fetch error:", e);
+            setHistoryLogs([]);
         }
         setIsLoadingHistory(false);
     };

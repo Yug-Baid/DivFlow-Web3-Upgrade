@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
 import { formatEther } from "viem";
 import { LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+import { fetchHistoryEvents } from "@/lib/historyClient";
 import { useState, useEffect, useMemo } from "react";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
@@ -139,36 +140,37 @@ export default function RevenueDashboard() {
     });
   }, [pendingProperties, publicClient]);
 
-  // Fetch History Logs
+  // Fetch History Logs using dedicated history client
   const fetchHistory = async () => {
-    if (!publicClient || !address || !isAuthorized) return;
+    if (!address || !isAuthorized) return;
     setIsLoadingHistory(true);
     try {
-      const approved = await publicClient.getContractEvents({
-        address: LAND_REGISTRY_ADDRESS,
-        abi: LAND_REGISTRY_ABI,
-        eventName: 'SaleRequestApproved',
-        fromBlock: 'earliest'
-      });
-      const rejected = await publicClient.getContractEvents({
-        address: LAND_REGISTRY_ADDRESS,
-        abi: LAND_REGISTRY_ABI,
-        eventName: 'SaleRequestRejected',
-        fromBlock: 'earliest'
-      });
+      const [approved, rejected] = await Promise.all([
+        fetchHistoryEvents(
+          LAND_REGISTRY_ADDRESS,
+          LAND_REGISTRY_ABI,
+          'SaleRequestApproved'
+        ),
+        fetchHistoryEvents(
+          LAND_REGISTRY_ADDRESS,
+          LAND_REGISTRY_ABI,
+          'SaleRequestRejected'
+        ),
+      ]);
 
       // Filter by employee address in JS
-      const myApproved = approved.filter(l => (l.args as any).employee?.toString().toLowerCase() === address.toLowerCase());
-      const myRejected = rejected.filter(l => (l.args as any).employee?.toString().toLowerCase() === address.toLowerCase());
+      const myApproved = approved.filter((l: any) => (l.args as any).employee?.toString().toLowerCase() === address.toLowerCase());
+      const myRejected = rejected.filter((l: any) => (l.args as any).employee?.toString().toLowerCase() === address.toLowerCase());
 
       const logs = [
-        ...myApproved.map(l => ({ type: 'Approved Sale', ...l })),
-        ...myRejected.map(l => ({ type: 'Rejected Sale', ...l }))
+        ...myApproved.map((l: any) => ({ type: 'Approved Sale', ...l })),
+        ...myRejected.map((l: any) => ({ type: 'Rejected Sale', ...l }))
       ].sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber));
 
       setHistoryLogs(logs);
     } catch (e) {
       console.error("History fetch error:", e);
+      setHistoryLogs([]);
     }
     setIsLoadingHistory(false);
   };

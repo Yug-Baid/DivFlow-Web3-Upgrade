@@ -10,7 +10,7 @@ import { USERS_ADDRESS, USERS_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } fr
 import { useState, useEffect } from "react";
 
 // Admin wallet address (Anvil account 0)
-const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const ADMIN_ADDRESS = "0xA3547d22cBc90a88e89125eE360887Ee7C30a9d5";
 
 export const HeroSection = () => {
   const { address, isConnected } = useAccount();

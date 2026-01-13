@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useReadContracts, usePublicClient } from "wagmi";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useReadContracts } from "wagmi";
 import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI, USERS_ADDRESS, USERS_ABI } from "@/lib/contracts";
+import { fetchHistoryEvents } from "@/lib/historyClient";
 import dynamic from 'next/dynamic';
 import { formatEther } from "viem";
 import Link from "next/link";
@@ -16,12 +17,11 @@ import { motion } from "framer-motion";
 import { StaffRouteGuard } from "@/components/StaffRouteGuard";
 
 // Admin address for role detection
-const ADMIN_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const ADMIN_ADDRESS = "0xA3547d22cBc90a88e89125eE360887Ee7C30a9d5";
 
 export default function MySales() {
     const router = useRouter();
     const { address, isConnected } = useAccount();
-    const publicClient = usePublicClient();
     const [mounted, setMounted] = useState(false);
     const [saleTxHashes, setSaleTxHashes] = useState<Record<string, string>>({});
 
@@ -67,9 +67,7 @@ export default function MySales() {
         }
     }, [isRegistered, isCheckingRegistration, address, router, isStaff, isConnected, mounted]);
 
-    // Strict guard to prevent flashing
-    if (!isConnected && mounted) return null;
-
+    // IMPORTANT: ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const { data: allSales, isLoading, refetch: refetchAllSales } = useReadContract({
         address: TRANSFER_OWNERSHIP_ADDRESS,
         abi: TRANSFER_OWNERSHIP_ABI,
@@ -83,9 +81,9 @@ export default function MySales() {
         ) || [];
     }, [allSales, address]);
 
-    // Fetch tx hashes for sold properties
+    // Fetch tx hashes for sold properties using dedicated history client
     useEffect(() => {
-        if (!publicClient || !mySales || mySales.length === 0) return;
+        if (!mySales || mySales.length === 0) return;
 
         const fetchHashes = async () => {
             const hashes: Record<string, string> = {};
@@ -100,13 +98,12 @@ export default function MySales() {
 
             await Promise.all(itemsToFetch.map(async (sale: any) => {
                 try {
-                    const logs = await publicClient.getContractEvents({
-                        address: TRANSFER_OWNERSHIP_ADDRESS,
-                        abi: TRANSFER_OWNERSHIP_ABI,
-                        eventName: 'OwnershipTransferred',
-                        args: { saleId: sale.saleId },
-                        fromBlock: 'earliest'
-                    });
+                    const logs = await fetchHistoryEvents(
+                        TRANSFER_OWNERSHIP_ADDRESS,
+                        TRANSFER_OWNERSHIP_ABI,
+                        'OwnershipTransferred',
+                        { saleId: sale.saleId }
+                    );
                     if (logs.length > 0) {
                         hashes[sale.saleId.toString()] = logs[0].transactionHash;
                     }
@@ -121,10 +118,7 @@ export default function MySales() {
         };
 
         fetchHashes();
-    }, [publicClient, mySales]); // mySales is now stable thanks to useMemo
-
-
-
+    }, [mySales]); // mySales is now stable thanks to useMemo
 
     // ISSUE-USER-REPORT: Fetch property details to check approval status
     const { data: propertyResults, isLoading: isLoadingProperties } = useReadContracts({
@@ -136,6 +130,9 @@ export default function MySales() {
         })) || [],
     });
 
+    // EARLY RETURNS MUST COME AFTER ALL HOOKS
+    // Strict guard to prevent flashing
+    if (!isConnected && mounted) return null;
     if (!mounted) return null;
 
     // ISSUE-2: Show loading while checking registration
