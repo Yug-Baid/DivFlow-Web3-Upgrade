@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EthPriceConverter } from "@/components/shared/EthPriceConverter";
 import { EthPriceDisplay } from "@/components/shared/EthPriceDisplay";
-import { MapPin, Tag, ShoppingCart, Loader2, Info, AlertTriangle, ImageOff, Search, ArrowLeft, ArrowRight, Filter } from "lucide-react";
+import { MapPin, Tag, ShoppingCart, Loader2, Info, AlertTriangle, ImageOff, Search, ArrowLeft, ArrowRight, Filter, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { resolveIPFS, getIPFSUrl, PropertyMetadata } from "@/lib/ipfs";
 
@@ -297,8 +297,8 @@ export default function Marketplace() {
             </Select>
           </div>
 
-          <Button variant="outline" size="icon" onClick={() => refetch()} title="Refresh">
-            <Loader2 className={`w-4 h-4 ${isLoadingSales ? 'animate-spin' : ''}`} />
+          <Button variant="outline" size="icon" onClick={() => refetch()} title="Refresh" className="shrink-0">
+            <RefreshCw className={`w-4 h-4 ${isLoadingSales ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </GlassCard>

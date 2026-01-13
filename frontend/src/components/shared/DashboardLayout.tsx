@@ -136,7 +136,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
             <MapPin className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-bold">LandChain</span>
+          <span className="font-bold">DivFlow</span>
         </Link>
         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2">
           {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -158,7 +158,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 <MapPin className="w-5 h-5 text-primary-foreground" />
               </div>
               <span className="text-xl font-bold">
-                Land<span className="text-gradient">Chain</span>
+                Div<span className="text-gradient">Flow</span>
               </span>
             </Link>
           </div>

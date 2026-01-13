@@ -4,7 +4,11 @@ import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { useState, useEffect, useRef } from "react";
 import { Wallet, LogOut, ChevronDown } from "lucide-react";
 
-export function WalletConnect() {
+interface WalletConnectProps {
+  dropdownPosition?: "up" | "down";
+}
+
+export function WalletConnect({ dropdownPosition = "up" }: WalletConnectProps) {
   const { address, isConnected } = useAccount();
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
@@ -29,6 +33,11 @@ export function WalletConnect() {
 
   if (!mounted) return null;
 
+  // Determine dropdown position classes
+  const dropdownPositionClasses = dropdownPosition === "down"
+    ? "top-full mt-2"
+    : "bottom-full mb-2";
+
   // Connected State - Show address with dropdown for disconnect
   if (isConnected && address) {
     return (
@@ -45,7 +54,7 @@ export function WalletConnect() {
         </button>
 
         {isDropdownOpen && (
-          <div className="absolute left-0 right-0 bottom-full mb-2 bg-card border border-border rounded-xl shadow-xl z-[100] overflow-hidden">
+          <div className={`absolute left-0 right-0 ${dropdownPositionClasses} bg-card border border-border rounded-xl shadow-xl z-[100] overflow-hidden`}>
             <div className="p-3 border-b border-border/50 bg-secondary/20">
               <p className="text-xs text-muted-foreground mb-1">Connected Wallet</p>
               <p className="text-xs font-mono text-foreground break-all">{address}</p>
