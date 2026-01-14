@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI, USERS_ADDRESS, USERS_ABI } from "@/lib/contracts";
+import { getTxUrl } from "@/lib/config";
 import { fetchHistoryEvents } from "@/lib/historyClient";
 import { formatEther, parseEther } from "viem";
 import { useRouter } from "next/navigation";
@@ -11,7 +12,7 @@ import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MapPin, Tag, ShoppingCart, Loader2, Info, ArrowLeft, Image as ImageIcon, FileText, Calendar, Wallet, History, ImageOff, ExternalLink } from "lucide-react";
+import { MapPin, Tag, ShoppingCart, Loader2, Info, ArrowLeft, Image as ImageIcon, FileText, Calendar, Wallet, History, ImageOff, ExternalLink, AlertTriangle, ShieldX } from "lucide-react";
 import { resolveIPFS, getIPFSUrl, PropertyMetadata } from "@/lib/ipfs";
 import DynamicMap from "@/components/shared/DynamicMap";
 import { UserInfoModal } from "@/components/UserInfoModal";
@@ -41,6 +42,34 @@ export default function PropertyDetailsPage({ params }: { params: { id: string }
         functionName: "getPropertyDetails",
         args: [propertyId],
     });
+
+    // Check if user is registered
+    const { data: isRegistered } = useReadContract({
+        address: USERS_ADDRESS,
+        abi: USERS_ABI,
+        functionName: "isUserRegistered",
+        args: address ? [address] : undefined,
+    });
+
+    // Staff detection
+    const { data: inspectorLocation } = useReadContract({
+        address: LAND_REGISTRY_ADDRESS,
+        abi: LAND_REGISTRY_ABI,
+        functionName: "getInspectorLocation",
+        args: address ? [address] : undefined,
+    });
+
+    const { data: employeeDept } = useReadContract({
+        address: LAND_REGISTRY_ADDRESS,
+        abi: LAND_REGISTRY_ABI,
+        functionName: "getEmployeeRevenueDept",
+        args: address ? [address] : undefined,
+    });
+
+    const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+    const isLandInspector = inspectorLocation && Number(inspectorLocation) > 0;
+    const isRevenueEmployee = employeeDept && Number(employeeDept) > 0;
+    const isStaff = isAdmin || isLandInspector || isRevenueEmployee;
 
     // Fetch Sales to find active sale
     const { data: allSales } = useReadContract({
@@ -265,7 +294,7 @@ export default function PropertyDetailsPage({ params }: { params: { id: string }
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => window.open(`https://sepolia.etherscan.io/tx/${event.tx}`, '_blank')}
+                                        onClick={() => window.open(getTxUrl(event.tx), '_blank')}
                                         className="h-7 text-xs shrink-0 self-start md:self-center"
                                     >
                                         View <ExternalLink className="w-3 h-3 ml-2" />
@@ -318,7 +347,29 @@ export default function PropertyDetailsPage({ params }: { params: { id: string }
                     {activeSale && (activeSale as any).owner !== address && (
                         <GlassCard className="p-6 border-primary/20 bg-primary/5">
                             <h3 className="font-bold mb-4">Interested in buying?</h3>
-                            {selectedUserAddress === address ? (
+                            {/* Staff cannot purchase */}
+                            {isStaff ? (
+                                <div className="p-4 bg-red-500/10 text-red-400 rounded-lg text-sm text-center border border-red-500/20">
+                                    <ShieldX className="w-6 h-6 mx-auto mb-2" />
+                                    <p className="font-medium">Staff members cannot purchase properties</p>
+                                    <p className="text-xs mt-1 text-muted-foreground">Please use a personal wallet to make purchases</p>
+                                </div>
+                            ) : !address ? (
+                                <div className="p-4 bg-yellow-500/10 text-yellow-500 rounded-lg text-sm text-center border border-yellow-500/20">
+                                    <AlertTriangle className="w-6 h-6 mx-auto mb-2" />
+                                    <p className="font-medium">Connect your wallet</p>
+                                    <p className="text-xs mt-1 text-muted-foreground">Please connect your wallet to submit purchase requests</p>
+                                </div>
+                            ) : !isRegistered ? (
+                                <div className="p-4 bg-yellow-500/10 text-yellow-500 rounded-lg text-sm text-center border border-yellow-500/20">
+                                    <AlertTriangle className="w-6 h-6 mx-auto mb-2" />
+                                    <p className="font-medium">Registration Required</p>
+                                    <p className="text-xs mt-1 text-muted-foreground mb-3">You must register your identity before submitting purchase requests</p>
+                                    <Button onClick={() => router.push('/register')} variant="hero" size="sm">
+                                        Register Now
+                                    </Button>
+                                </div>
+                            ) : selectedUserAddress === address ? (
                                 <div className="p-3 bg-yellow-500/10 text-yellow-500 rounded text-sm text-center">
                                     You own this property
                                 </div>

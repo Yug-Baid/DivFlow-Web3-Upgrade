@@ -11,7 +11,6 @@ const navLinks = [
   { label: "Features", href: "#features" },
   { label: "How It Works", href: "#how-it-works" },
   { label: "Security", href: "#security" },
-  { label: "Privacy", href: "#privacy" },
 ];
 
 export const Navbar = () => {

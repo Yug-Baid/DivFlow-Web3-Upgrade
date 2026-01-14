@@ -4,7 +4,6 @@ import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 import { MarketplaceSection } from "@/components/landing/MarketplaceSection";
 import { SecuritySection } from "@/components/landing/SecuritySection";
-import { CTASection } from "@/components/landing/CTASection";
 import { Footer } from "@/components/landing/Footer";
 
 export default function Home() {
@@ -17,7 +16,6 @@ export default function Home() {
         <HowItWorksSection />
         <MarketplaceSection />
         <SecuritySection />
-        <CTASection />
       </main>
       <Footer />
     </div>

@@ -116,7 +116,6 @@ export const HeroSection = () => {
             Transparent, secure, and tamper-proof property records for the digital age.
           </motion.p>
 
-          {/* CTA Buttons - BUG 4 FIX: Dynamic button based on registration status */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -129,9 +128,6 @@ export const HeroSection = () => {
                 <ButtonIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
-            <Button variant="ghost-glow" size="lg">
-              View Documentation
-            </Button>
           </motion.div>
 
           {/* Stats */}

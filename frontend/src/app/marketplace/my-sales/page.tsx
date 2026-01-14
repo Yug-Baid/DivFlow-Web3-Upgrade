@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useReadContracts } from "wagmi";
 import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI, USERS_ADDRESS, USERS_ABI } from "@/lib/contracts";
+import { getTxUrl, getAddressUrl } from "@/lib/config";
+import { resolveIPFS, PropertyMetadata } from "@/lib/ipfs";
 import { fetchHistoryEvents } from "@/lib/historyClient";
 import dynamic from 'next/dynamic';
 import { formatEther } from "viem";
@@ -179,131 +181,146 @@ export default function MySales() {
 
     return (
         <StaffRouteGuard>
-        <DashboardLayout>
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-foreground mb-2">My Sales</h1>
-                <p className="text-muted-foreground">Manage your listed properties and incoming requests</p>
-            </div>
+            <DashboardLayout>
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-foreground mb-2">My Sales</h1>
+                    <p className="text-muted-foreground">Manage your listed properties and incoming requests</p>
+                </div>
 
-            {isLoadingData ? (
-                <div className="text-center py-10 text-muted-foreground animate-pulse">Loading sales...</div>
-            ) : (
-                <Tabs defaultValue="active" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 mb-8">
-                        <TabsTrigger value="active">Active Listings</TabsTrigger>
-                        <TabsTrigger value="history">Sales History</TabsTrigger>
-                    </TabsList>
+                {isLoadingData ? (
+                    <div className="text-center py-10 text-muted-foreground animate-pulse">Loading sales...</div>
+                ) : (
+                    <Tabs defaultValue="active" className="w-full">
+                        <TabsList className="grid w-full grid-cols-2 mb-8">
+                            <TabsTrigger value="active">Active Listings</TabsTrigger>
+                            <TabsTrigger value="history">Sales History</TabsTrigger>
+                        </TabsList>
 
-                    <TabsContent value="active" className="space-y-6">
-                        {(() => {
-                            // Filter for Active Listings
-                            // FIX: STRICTLY filter out sold (3) or cancelled (2) sales.
-                            // Only show Active (0) or AcceptedToBuyer (1).
-                            const filteredSales = mySales.map((sale: any, index: number) => {
-                                const propertyResult = propertyResults?.[index];
-                                const propertyState = propertyResult?.status === 'success' ? (propertyResult.result as any).state : null;
-                                const propertyOwner = propertyResult?.status === 'success' ? (propertyResult.result as any).owner : null;
-                                return { ...sale, propertyState, propertyOwner };
-                            }).filter(item => {
-                                // Must be Active (0) or Accepted (1).
-                                // Even if propertyState is 4 (OnSale), if 'this' sale is sold (3), it's history.
-                                const saleState = Number(item.state);
-                                const isSaleActive = saleState === 0 || saleState === 1;
+                        <TabsContent value="active" className="space-y-6">
+                            {(() => {
+                                // Filter for Active Listings
+                                // FIX: STRICTLY filter out sold (3) or cancelled (2) sales.
+                                // Only show Active (0) or AcceptedToBuyer (1).
+                                const filteredSales = mySales.map((sale: any, index: number) => {
+                                    const propertyResult = propertyResults?.[index];
+                                    const propertyState = propertyResult?.status === 'success' ? (propertyResult.result as any).state : null;
+                                    const propertyOwner = propertyResult?.status === 'success' ? (propertyResult.result as any).owner : null;
+                                    const propertyIpfsHash = propertyResult?.status === 'success' ? (propertyResult.result as any).ipfsHash : null;
+                                    return { ...sale, propertyState, propertyOwner, propertyIpfsHash };
+                                }).filter(item => {
+                                    // Must be Active (0) or Accepted (1).
+                                    // Even if propertyState is 4 (OnSale), if 'this' sale is sold (3), it's history.
+                                    const saleState = Number(item.state);
+                                    const isSaleActive = saleState === 0 || saleState === 1;
 
-                                // FIX: Check Property State.
-                                // If Property is Verified (2), it means the Sale Request was REJECTED by Revenue.
-                                // It is no longer "Active" even if the Sale struct says Active.
-                                // Valid Active States: OnSale (4) or SalePending (6).
-                                const propertyVal = Number(item.propertyState);
-                                const isPropertyActive = propertyVal === 4 || propertyVal === 6;
+                                    // FIX: Check Property State.
+                                    // If Property is Verified (2), it means the Sale Request was REJECTED by Revenue.
+                                    // It is no longer "Active" even if the Sale struct says Active.
+                                    // Valid Active States: OnSale (4) or SalePending (6).
+                                    const propertyVal = Number(item.propertyState);
+                                    const isPropertyActive = propertyVal === 4 || propertyVal === 6;
 
-                                // FIX: Must also be the CURRENT owner of the property.
-                                // If I sold it (via another sale or transfer), I am no longer the owner.
-                                // My old sale request is effectively invalid/stale.
-                                const isCurrentOwner = item.propertyOwner && address && item.propertyOwner.toLowerCase() === address.toLowerCase();
+                                    // FIX: Must also be the CURRENT owner of the property.
+                                    // If I sold it (via another sale or transfer), I am no longer the owner.
+                                    // My old sale request is effectively invalid/stale.
+                                    const isCurrentOwner = item.propertyOwner && address && item.propertyOwner.toLowerCase() === address.toLowerCase();
 
-                                return isSaleActive && isPropertyActive && isCurrentOwner;
-                            });
+                                    return isSaleActive && isPropertyActive && isCurrentOwner;
+                                });
 
-                            // Deduplicate properties (if somehow multiple active sales exist for same property - shouldn't happen but good safety)
-                            const uniqueSales = new Map();
-                            filteredSales.forEach((sale: any) => {
-                                const existing = uniqueSales.get(sale.propertyId.toString());
-                                if (!existing || sale.saleId > existing.saleId) {
-                                    uniqueSales.set(sale.propertyId.toString(), sale);
+                                // Deduplicate properties (if somehow multiple active sales exist for same property - shouldn't happen but good safety)
+                                const uniqueSales = new Map();
+                                filteredSales.forEach((sale: any) => {
+                                    const existing = uniqueSales.get(sale.propertyId.toString());
+                                    if (!existing || sale.saleId > existing.saleId) {
+                                        uniqueSales.set(sale.propertyId.toString(), sale);
+                                    }
+                                });
+                                const finalSales = Array.from(uniqueSales.values());
+
+                                if (!finalSales || finalSales.length === 0) {
+                                    return (
+                                        <GlassCard className="text-center py-20">
+                                            <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Tag className="w-8 h-8 text-muted-foreground" />
+                                            </div>
+                                            <h3 className="text-lg font-medium text-foreground">No Active Listed Sales</h3>
+                                            <p className="text-muted-foreground mt-2 mb-6">You don't have any properties currently listed on the marketplace.</p>
+                                            <Link href="/track">
+                                                <Button variant="hero">Check Status in Track</Button>
+                                            </Link>
+                                        </GlassCard>
+                                    );
                                 }
-                            });
-                            const finalSales = Array.from(uniqueSales.values());
 
-                            if (!finalSales || finalSales.length === 0) {
                                 return (
-                                    <GlassCard className="text-center py-20">
-                                        <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <Tag className="w-8 h-8 text-muted-foreground" />
-                                        </div>
-                                        <h3 className="text-lg font-medium text-foreground">No Active Listed Sales</h3>
-                                        <p className="text-muted-foreground mt-2 mb-6">You don't have any properties currently listed on the marketplace.</p>
-                                        <Link href="/track">
-                                            <Button variant="hero">Check Status in Track</Button>
-                                        </Link>
-                                    </GlassCard>
+                                    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
+                                        {finalSales.map((sale: any) => (
+                                            <motion.div key={sale.saleId.toString()} variants={itemVariants}>
+                                                <SaleItem sale={sale} propertyState={sale.propertyState} propertyIpfsHash={sale.propertyIpfsHash} onUpdate={refetchAllSales} />
+                                            </motion.div>
+                                        ))}
+                                    </motion.div>
                                 );
-                            }
+                            })()}
+                        </TabsContent>
 
-                            return (
-                                <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
-                                    {finalSales.map((sale: any) => (
-                                        <motion.div key={sale.saleId.toString()} variants={itemVariants}>
-                                            <SaleItem sale={sale} propertyState={sale.propertyState} onUpdate={refetchAllSales} />
-                                        </motion.div>
-                                    ))}
-                                </motion.div>
-                            );
-                        })()}
-                    </TabsContent>
+                        <TabsContent value="history" className="space-y-6">
+                            {(() => {
+                                // Filter for History (state === 3 [Success] or 2 [Closed/Cancelled])
+                                const historySales = mySales.filter(sale => Number(sale.state) === 3 || Number(sale.state) === 2);
 
-                    <TabsContent value="history" className="space-y-6">
-                        {(() => {
-                            // Filter for History (state === 3 [Success] or 2 [Closed/Cancelled])
-                            const historySales = mySales.filter(sale => Number(sale.state) === 3 || Number(sale.state) === 2);
+                                if (!historySales || historySales.length === 0) {
+                                    return (
+                                        <GlassCard className="text-center py-20">
+                                            <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <History className="w-8 h-8 text-muted-foreground" />
+                                            </div>
+                                            <h3 className="text-lg font-medium text-foreground">No Past Sales</h3>
+                                            <p className="text-muted-foreground mt-2">You haven't sold any properties yet.</p>
+                                        </GlassCard>
+                                    );
+                                }
 
-                            if (!historySales || historySales.length === 0) {
                                 return (
-                                    <GlassCard className="text-center py-20">
-                                        <div className="w-16 h-16 bg-secondary/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <History className="w-8 h-8 text-muted-foreground" />
-                                        </div>
-                                        <h3 className="text-lg font-medium text-foreground">No Past Sales</h3>
-                                        <p className="text-muted-foreground mt-2">You haven't sold any properties yet.</p>
-                                    </GlassCard>
+                                    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
+                                        {historySales.map((sale: any) => (
+                                            <motion.div key={sale.saleId.toString()} variants={itemVariants}>
+                                                <SaleItem
+                                                    sale={sale}
+                                                    propertyState={5} // Bought
+                                                    propertyIpfsHash={(propertyResults?.[(mySales as any[]).findIndex((s: any) => s.saleId === sale.saleId)]?.result as any)?.ipfsHash}
+                                                    onUpdate={refetchAllSales}
+                                                    isHistory
+                                                    txHash={saleTxHashes[sale.saleId.toString()]}
+                                                />
+                                            </motion.div>
+                                        ))}
+                                    </motion.div>
                                 );
-                            }
-
-                            return (
-                                <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
-                                    {historySales.map((sale: any) => (
-                                        <motion.div key={sale.saleId.toString()} variants={itemVariants}>
-                                            <SaleItem
-                                                sale={sale}
-                                                propertyState={5} // Bought
-                                                onUpdate={refetchAllSales}
-                                                isHistory
-                                                txHash={saleTxHashes[sale.saleId.toString()]}
-                                            />
-                                        </motion.div>
-                                    ))}
-                                </motion.div>
-                            );
-                        })()}
-                    </TabsContent>
-                </Tabs>
-            )}
-        </DashboardLayout>
-    </StaffRouteGuard>
+                            })()}
+                        </TabsContent>
+                    </Tabs>
+                )}
+            </DashboardLayout>
+        </StaffRouteGuard>
     );
 }
 
-function SaleItem({ sale, propertyState, onUpdate, isHistory, txHash }: { sale: any, propertyState?: number | null, onUpdate?: () => void, isHistory?: boolean, txHash?: string }) {
+function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, txHash }: { sale: any, propertyState?: number | null, propertyIpfsHash?: string | null, onUpdate?: () => void, isHistory?: boolean, txHash?: string }) {
+    const [propertyName, setPropertyName] = useState<string | null>(null);
+
+    // Fetch property metadata to get name
+    useEffect(() => {
+        if (propertyIpfsHash) {
+            resolveIPFS(propertyIpfsHash).then(({ isMetadata, data }) => {
+                if (isMetadata && data?.name) {
+                    setPropertyName(data.name);
+                }
+            }).catch(() => setPropertyName(null));
+        }
+    }, [propertyIpfsHash]);
+
     const { data: requests, isLoading: isLoadingRequests, refetch } = useReadContract({
         address: TRANSFER_OWNERSHIP_ADDRESS,
         abi: TRANSFER_OWNERSHIP_ABI,
@@ -329,10 +346,19 @@ function SaleItem({ sale, propertyState, onUpdate, isHistory, txHash }: { sale: 
             // Always reset processing states and refetch
             setIsAccepting(false);
             setIsRejecting(false);
-            refetch(); // Refetch requests
+
+            // FIX: Refetch the requests data to get updated state from blockchain
+            refetch();
             if (onUpdate) onUpdate(); // Refetch parent sales list to update card status
+
+            // FIX: Reset write state after a short delay to allow UI to show confirmation message
+            // then clear the success state so it doesn't persist
+            const timer = setTimeout(() => {
+                resetWrite();
+            }, 2000);
+            return () => clearTimeout(timer);
         }
-    }, [isConfirmed, refetch, isAccepting, isRejecting, onUpdate]);
+    }, [isConfirmed, refetch, isAccepting, isRejecting, onUpdate, resetWrite]);
 
     // Check if ANY request is already in accepted state (state === 2)
     useEffect(() => {
@@ -434,7 +460,7 @@ function SaleItem({ sale, propertyState, onUpdate, isHistory, txHash }: { sale: 
             <div className="p-6 border-b border-border/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-secondary/20">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
-                        <h3 className="font-semibold text-lg text-foreground">Sale #{sale.saleId.toString()}</h3>
+                        <h3 className="font-semibold text-lg text-foreground">{propertyName || `Property #${sale.propertyId.toString()}`}</h3>
                         <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusLabel === 'Pending Approval'
                             ? 'bg-orange-500/10 text-orange-500 border-orange-500/20'
                             : statusLabel === 'Listed' || statusLabel === 'Active'
@@ -451,6 +477,8 @@ function SaleItem({ sale, propertyState, onUpdate, isHistory, txHash }: { sale: 
                         Listed Price: <span className="text-foreground font-mono">{formatEther(sale.price)} ETH</span>
                         <span className="text-border mx-1">|</span>
                         Property #{sale.propertyId.toString()}
+                        <span className="text-border mx-1">|</span>
+                        Sale #{sale.saleId.toString()}
                     </p>
                 </div>
             </div>
@@ -518,9 +546,9 @@ function SaleItem({ sale, propertyState, onUpdate, isHistory, txHash }: { sale: 
                         size="sm"
                         onClick={() => {
                             if (txHash) {
-                                window.open(`https://sepolia.etherscan.io/tx/${txHash}`, '_blank');
+                                window.open(getTxUrl(txHash), '_blank');
                             } else {
-                                window.open(`https://sepolia.etherscan.io/address/${sale.acceptedFor}`, '_blank');
+                                window.open(getAddressUrl(sale.acceptedFor), '_blank');
                             }
                         }}
                         className="h-8 text-xs shrink-0 ml-auto md:ml-0"

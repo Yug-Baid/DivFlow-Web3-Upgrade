@@ -68,15 +68,7 @@ export const Footer = () => {
           ))}
         </div>
 
-        {/* Bottom */}
-        <div className="border-t border-border/50 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-muted-foreground text-sm">
-            © 2024 DivFlow. All rights reserved.
-          </p>
-          <p className="text-muted-foreground text-sm">
-            Built with ❤️ for the decentralized future
-          </p>
-        </div>
+
       </div>
     </footer>
   );

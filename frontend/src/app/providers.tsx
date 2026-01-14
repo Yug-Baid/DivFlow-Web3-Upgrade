@@ -7,26 +7,27 @@ import { IPFSProvider } from '@/contexts/IPFSContext'
 
 import { config } from '@/lib/config'
 
-// Anvil chain configuration for network switching
-const ANVIL_CHAIN = {
-  chainId: '0x7A69', // 31337 in hex
-  chainName: 'Anvil Local',
-  rpcUrls: ['http://127.0.0.1:8545'],
+// Base Sepolia chain configuration for network switching
+const BASE_SEPOLIA_CHAIN = {
+  chainId: '0x14A34', // 84532 in hex
+  chainName: 'Base Sepolia',
+  rpcUrls: ['https://sepolia.base.org'],
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  blockExplorerUrls: ['https://sepolia.basescan.org'],
 };
 
 export function Providers(props: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient())
 
-  // Automatically request network switch to Anvil on mount
+  // Automatically request network switch to Base Sepolia on mount
   useEffect(() => {
-    const switchToAnvil = async () => {
+    const switchToBaseSepolia = async () => {
       if (typeof window !== 'undefined' && window.ethereum) {
         try {
-          // Try switching to Anvil
+          // Try switching to Base Sepolia
           await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: ANVIL_CHAIN.chainId }],
+            params: [{ chainId: BASE_SEPOLIA_CHAIN.chainId }],
           });
         } catch (switchError: any) {
           // If chain doesn't exist, add it
@@ -34,19 +35,19 @@ export function Providers(props: { children: ReactNode }) {
             try {
               await window.ethereum.request({
                 method: 'wallet_addEthereumChain',
-                params: [ANVIL_CHAIN],
+                params: [BASE_SEPOLIA_CHAIN],
               });
             } catch (addError) {
-              console.error('Failed to add Anvil chain:', addError);
+              console.error('Failed to add Base Sepolia chain:', addError);
             }
           } else {
-            console.error('Failed to switch to Anvil:', switchError);
+            console.error('Failed to switch to Base Sepolia:', switchError);
           }
         }
       }
     };
 
-    switchToAnvil();
+    switchToBaseSepolia();
   }, []);
 
   return (

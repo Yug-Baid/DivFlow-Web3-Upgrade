@@ -34,6 +34,7 @@
     "datastore-level": "^12.0.2",
     "ethers": "^6.16.0",
     "events": "^3.3.0",
+    "firebase": "^12.7.0",
     "framer-motion": "^11.2.6",
     "gsap": "^3.14.2",
     "helia": "^6.0.14",

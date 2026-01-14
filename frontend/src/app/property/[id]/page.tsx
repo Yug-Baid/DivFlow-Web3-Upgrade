@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI, TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI } from "@/lib/contracts";
+import { getTxUrl } from "@/lib/config";
 import { fetchHistoryEvents, DEPLOYMENT_BLOCK } from "@/lib/historyClient";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -277,7 +278,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open(`https://sepolia.etherscan.io/tx/${event.tx}`, '_blank')}
+                        onClick={() => window.open(getTxUrl(event.tx), '_blank')}
                         className="h-7 text-xs shrink-0"
                       >
                         View <ExternalLink className="w-3 h-3 ml-2" />
