@@ -18,3 +18,9 @@ export const config = createConfig({
     [baseSepolia.id]: http(BASE_SEPOLIA_RPC),
   },
 })
+
+// Block Explorer Configuration for Base Sepolia
+export const BLOCK_EXPLORER_URL = 'https://sepolia.basescan.org';
+export const getTxUrl = (hash: string) => `${BLOCK_EXPLORER_URL}/tx/${hash}`;
+export const getAddressUrl = (address: string) => `${BLOCK_EXPLORER_URL}/address/${address}`;
+

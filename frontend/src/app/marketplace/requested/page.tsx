@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI, LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI, USERS_ADDRESS, USERS_ABI } from "@/lib/contracts";
+import { resolveIPFS, PropertyMetadata } from "@/lib/ipfs";
 import { formatEther } from "viem";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -48,6 +49,7 @@ export default function RequestedSales() {
     const [mounted, setMounted] = useState(false);
     const [buyHistory, setBuyHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    const [propertyNames, setPropertyNames] = useState<Record<string, string>>({});
 
     useEffect(() => {
         setMounted(true);
@@ -147,6 +149,48 @@ export default function RequestedSales() {
         contracts: requestedUsersQueries,
         query: { enabled: activeSales.length > 0 },
     });
+
+    // Fetch property details to get IPFS hashes for names
+    const propertyDetailsQueries = useMemo(() =>
+        uniqueSales.map((sale: any) => ({
+            address: LAND_REGISTRY_ADDRESS as `0x${string}`,
+            abi: LAND_REGISTRY_ABI,
+            functionName: "getPropertyDetails",
+            args: [sale.propertyId],
+        })),
+        [uniqueSales]
+    );
+
+    const { data: propertyDetailsResults } = useReadContracts({
+        contracts: propertyDetailsQueries,
+        query: { enabled: uniqueSales.length > 0 },
+    });
+
+    // Fetch property names from IPFS
+    useEffect(() => {
+        if (!propertyDetailsResults) return;
+
+        const fetchNames = async () => {
+            const names: Record<string, string> = {};
+            await Promise.all(
+                (propertyDetailsResults as any[]).map(async (result, index) => {
+                    if (result.status === 'success' && result.result?.ipfsHash) {
+                        try {
+                            const { isMetadata, data } = await resolveIPFS(result.result.ipfsHash);
+                            if (isMetadata && data?.name) {
+                                names[uniqueSales[index].propertyId.toString()] = data.name;
+                            }
+                        } catch (e) {
+                            console.error("Error fetching property name:", e);
+                        }
+                    }
+                })
+            );
+            setPropertyNames(prev => ({ ...prev, ...names }));
+        };
+
+        fetchNames();
+    }, [propertyDetailsResults, uniqueSales]);
 
     // Create a map of saleId -> the most relevant bid for this user
     // Priority: Accepted (state 2) > Pending (state 0 or 6) > Cancelled (filtered out)
@@ -320,8 +364,8 @@ export default function RequestedSales() {
                                             <GlassCard hover className="relative overflow-hidden">
                                                 <div className="flex justify-between items-start mb-4">
                                                     <div>
-                                                        <h3 className="font-semibold text-lg text-foreground">Sale #{sale.saleId.toString()}</h3>
-                                                        <p className="text-sm text-muted-foreground">Property #{sale.propertyId.toString()}</p>
+                                                        <h3 className="font-semibold text-lg text-foreground">{propertyNames[sale.propertyId.toString()] || `Property #${sale.propertyId.toString()}`}</h3>
+                                                        <p className="text-sm text-muted-foreground">Property #{sale.propertyId.toString()} | Sale #{sale.saleId.toString()}</p>
                                                     </div>
                                                 </div>
 
@@ -413,7 +457,7 @@ export default function RequestedSales() {
                                                     <div className="flex items-center gap-2 mb-2">
                                                         <CheckCircle className="w-5 h-5 text-green-500" />
                                                         <h3 className="font-semibold text-foreground">
-                                                            Property #{sale.propertyId?.toString()}
+                                                            {propertyNames[sale.propertyId?.toString()] || `Property #${sale.propertyId?.toString()}`}
                                                         </h3>
                                                         <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full">
                                                             Purchased

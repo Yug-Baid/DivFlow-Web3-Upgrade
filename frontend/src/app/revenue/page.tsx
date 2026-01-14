@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
 import { formatEther } from "viem";
 import { LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+import { getTxUrl } from "@/lib/config";
 import { fetchHistoryEvents } from "@/lib/historyClient";
 import { useState, useEffect, useMemo } from "react";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
@@ -141,9 +142,11 @@ export default function RevenueDashboard() {
   }, [pendingProperties, publicClient]);
 
   // Fetch History Logs using dedicated history client
+  // Fixed: Fetch for ANY connected address, not just authorized (for view-only mode)
   const fetchHistory = async () => {
-    if (!address || !isAuthorized) return;
+    if (!address) return;
     setIsLoadingHistory(true);
+    setHistoryLogs([]); // Clear previous data to prevent showing wrong staff's history
     try {
       const [approved, rejected] = await Promise.all([
         fetchHistoryEvents(
@@ -175,9 +178,10 @@ export default function RevenueDashboard() {
     setIsLoadingHistory(false);
   };
 
+  // Fixed: Fetch history whenever address changes (not just when authorized)
   useEffect(() => {
-    if (isAuthorized) fetchHistory();
-  }, [isAuthorized, address]);
+    if (address) fetchHistory();
+  }, [address]);
 
 
   // Actions
@@ -551,7 +555,7 @@ export default function RevenueDashboard() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => window.open(`https://sepolia.etherscan.io/tx/${log.transactionHash}`, '_blank')}
+                      onClick={() => window.open(getTxUrl(log.transactionHash), '_blank')}
                       className="h-8 text-xs shrink-0"
                     >
                       View <ExternalLink className="w-3 h-3 ml-2" />
