@@ -444,8 +444,8 @@ export default function Dashboard() {
                             <span className="text-muted-foreground">Area</span>
                             <span className="font-mono text-foreground">{property.area.toString()} sq.ft</span>
                           </div>
-                          {/* Only show Est. Value if property has been listed for sale (price > 0) */}
-                          {Number(property.price) > 0 && (
+                          {/* Only show Est. Value if property is actively on sale (state 4=OnSale or 6=SalePending) */}
+                          {(property.state === 4 || property.state === 6) && Number(property.price) > 0 && (
                             <div className="flex justify-between text-sm pt-2 border-t border-border/50 mt-2">
                               <span className="text-muted-foreground">Est. Value</span>
                               <EthPriceDisplay ethAmount={property.price} size="sm" showSymbol />

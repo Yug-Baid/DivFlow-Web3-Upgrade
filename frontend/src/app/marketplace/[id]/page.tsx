@@ -258,6 +258,17 @@ export default function PropertyDetailsPage({ params }: { params: { id: string }
                                 initialLng={metadata?.properties?.location?.lng}
                             />
                         </div>
+                        
+                        {/* Property Address */}
+                        {metadata?.properties?.location?.address && (
+                            <div className="mt-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                                <div className="flex items-start gap-3">
+                                    <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                                    <p className="text-sm font-medium text-foreground">{metadata.properties.location.address}</p>
+                                </div>
+                            </div>
+                        )}
+                        
                         <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
                             <div className="bg-secondary/30 p-3 rounded flex justify-between">
                                 <span className="text-muted-foreground">Location ID</span>

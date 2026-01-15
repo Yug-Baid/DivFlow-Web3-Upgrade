@@ -79,4 +79,59 @@ export async function setChatParticipants(
   await push(participantsRef, { inspector, revenue });
 }
 
+/**
+ * Send a message request notification to inform recipient of a new conversation
+ * This allows users to discover messages from contacts they haven't added
+ */
+export async function sendMessageRequest(
+  targetAddress: string,
+  senderAddress: string
+): Promise<void> {
+  const requestsRef = ref(database, `message-requests/${targetAddress.toLowerCase()}`);
+  // Check if request already exists to avoid duplicates
+  await push(requestsRef, {
+    from: senderAddress,
+    timestamp: Date.now(),
+  });
+}
+
+/**
+ * Subscribe to message requests for a user
+ * Returns an unsubscribe function
+ */
+export function subscribeToMessageRequests(
+  userAddress: string,
+  callback: (requests: { from: string; timestamp: number }[]) => void
+): () => void {
+  const requestsRef = ref(database, `message-requests/${userAddress.toLowerCase()}`);
+  const requestsQuery = query(requestsRef, orderByChild('timestamp'), limitToLast(50));
+
+  const handleValue = (snapshot: any) => {
+    const requests: { from: string; timestamp: number }[] = [];
+    if (snapshot.exists()) {
+      snapshot.forEach((child: any) => {
+        const val = child.val();
+        requests.push({
+          from: val.from,
+          timestamp: val.timestamp,
+        });
+      });
+    }
+    // Get unique senders (latest request per sender)
+    const uniqueSenders = new Map<string, number>();
+    requests.forEach(r => {
+      const key = r.from.toLowerCase();
+      if (!uniqueSenders.has(key) || uniqueSenders.get(key)! < r.timestamp) {
+        uniqueSenders.set(key, r.timestamp);
+      }
+    });
+    const uniqueRequests = Array.from(uniqueSenders.entries()).map(([from, timestamp]) => ({ from, timestamp }));
+    callback(uniqueRequests);
+  };
+
+  onValue(requestsQuery, handleValue);
+
+  return () => off(requestsQuery, 'value', handleValue);
+}
+
 export { database };
