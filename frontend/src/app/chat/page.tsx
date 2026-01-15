@@ -5,10 +5,10 @@ import { useAccount } from "wagmi";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { ChatWindow, ChatMessage } from "@/components/shared/ChatWindow";
-import { sendMessage as firebaseSendMessage, subscribeToMessages } from "@/lib/firebase";
+import { sendMessage as firebaseSendMessage, subscribeToMessages, sendMessageRequest, subscribeToMessageRequests } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, MessageSquare, Hash, Zap } from "lucide-react";
+import { Plus, MessageSquare, Hash, Zap, UserPlus } from "lucide-react";
 
 export default function GlobalChatPage() {
     const { address } = useAccount();
@@ -22,6 +22,7 @@ export default function GlobalChatPage() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [status, setStatus] = useState<'connecting' | 'synced' | 'error'>('connecting');
     const [unread, setUnread] = useState<string[]>([]);
+    const [pendingRequests, setPendingRequests] = useState<string[]>([]);
     
     // Track last seen message count per contact to detect new messages
     const lastSeenCountRef = useRef<Record<string, number>>({});
@@ -41,6 +42,21 @@ export default function GlobalChatPage() {
             lastSeenCountRef.current = JSON.parse(seenData);
         }
     }, [address]);
+
+    // Subscribe to message requests (discover new contacts who messaged you)
+    useEffect(() => {
+        if (!address) return;
+
+        const unsubscribe = subscribeToMessageRequests(address, (requests) => {
+            // Filter out contacts we already have
+            const newRequests = requests
+                .map(r => r.from)
+                .filter(from => !contacts.includes(from) && from.toLowerCase() !== address.toLowerCase());
+            setPendingRequests(newRequests);
+        });
+
+        return () => unsubscribe();
+    }, [address, contacts]);
 
     // Helper to get consistent DM ID
     const getDmId = (addr1: string, addr2: string) => {
@@ -153,11 +169,28 @@ export default function GlobalChatPage() {
         
         try {
             await firebaseSendMessage(dmId, address, text);
+            // Send a message request so recipient can discover this conversation
+            await sendMessageRequest(activeContact, address);
         } catch (e) {
             console.error("Failed to send message:", e);
             throw e;
         }
     }, [address, activeContact]);
+
+    // Accept a message request and add to contacts
+    const acceptRequest = useCallback((from: string) => {
+        if (!address) return;
+        
+        if (!contacts.includes(from)) {
+            const updated = [...contacts, from];
+            setContacts(updated);
+            localStorage.setItem(`divflow-contacts-${address.toLowerCase()}`, JSON.stringify(updated));
+        }
+        
+        // Remove from pending
+        setPendingRequests(prev => prev.filter(r => r.toLowerCase() !== from.toLowerCase()));
+        setActiveContact(from);
+    }, [address, contacts]);
 
     return (
         <DashboardLayout>
@@ -196,9 +229,30 @@ export default function GlobalChatPage() {
                         </div>
                     </div>
 
+                    {/* Pending Message Requests */}
+                    {pendingRequests.length > 0 && (
+                        <div className="mb-4">
+                            <h3 className="text-xs text-muted-foreground mb-2 flex items-center justify-between">
+                                <span className="flex items-center gap-1">
+                                    <UserPlus className="w-3 h-3" />
+                                    New Messages
+                                </span>
+                                <span className="bg-orange-500 text-white text-[10px] px-1.5 rounded-full">{pendingRequests.length}</span>
+                            </h3>
+                            <div className="space-y-2">
+                                {pendingRequests.map(req => (
+                                    <div key={req} className="flex items-center justify-between p-2 bg-orange-500/10 border border-orange-500/30 rounded-lg text-xs animate-pulse">
+                                        <span className="font-mono truncate w-24">{req.slice(0, 6)}...{req.slice(-4)}</span>
+                                        <Button size="sm" className="h-6 text-[10px] bg-orange-500 hover:bg-orange-600" onClick={() => acceptRequest(req)}>Accept</Button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Contacts List */}
                     <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
-                        {contacts.length === 0 && (
+                        {contacts.length === 0 && pendingRequests.length === 0 && (
                             <p className="text-xs text-muted-foreground text-center py-4">
                                 No contacts yet.<br/>Add an address to start chatting.
                             </p>
