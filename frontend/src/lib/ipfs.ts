@@ -28,16 +28,23 @@ export interface PropertyMetadata {
 }
 
 // User profile for staff visibility (stored in IPFS during registration)
+// SECURITY: Updated to support encrypted sensitive data
 export interface UserProfile {
     walletAddress: string;
     firstName: string;
     lastName: string;
-    pan: string;           // Full PAN for authorized staff viewing
+    // Legacy fields (unencrypted) - kept for backward compatibility
+    pan?: string;           // Full PAN (deprecated - use panEncrypted)
+    aadhaar?: string;       // Full Aadhaar (deprecated - use aadhaarEncrypted)
+    // Encrypted fields (secure)
+    panEncrypted?: string;      // AES-256-GCM encrypted PAN
+    aadhaarEncrypted?: string;  // AES-256-GCM encrypted Aadhaar
+    // Masked fields (always present for display)
     panMasked: string;     // XXXXXX1234F
-    aadhaar: string;       // Full Aadhaar for authorized staff viewing
     aadhaarMasked: string; // XXXX XXXX 1234
     mobile: string;
     registeredAt: number;  // Unix timestamp
+    encryptionVersion?: number; // 0 = no encryption, 1 = AES-256-GCM
 }
 
 /**

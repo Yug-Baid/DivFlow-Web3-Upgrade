@@ -1,8 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { decryptSensitiveData } from '@/lib/encryption';
+import { createPublicClient, http } from 'viem';
+import { baseSepolia } from 'viem/chains';
 
 // The encryption secret - stored server-side only
 const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET || '';
+
+// Contract addresses and minimal ABI for verification
+const LAND_REGISTRY_ADDRESS = '0x028d56eB2e6F3a47653062CF55cB4bD20E5a2dFb' as const;
+const ADMIN_ADDRESS = '0xA3547d22cBc90a88e89125eE360887Ee7C30a9d5';
+
+const VERIFY_ABI = [
+    {
+        inputs: [{ internalType: 'address', name: 'inspector', type: 'address' }],
+        name: 'getInspectorLocation',
+        outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+    {
+        inputs: [{ internalType: 'address', name: 'employee', type: 'address' }],
+        name: 'getEmployeeRevenueDept',
+        outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+] as const;
+
+// Create public client for on-chain verification
+const publicClient = createPublicClient({
+    chain: baseSepolia,
+    transport: http(process.env.NEXT_PUBLIC_ALCHEMY_RPC_URL || 'https://sepolia.base.org'),
+});
 
 /**
  * POST /api/decrypt
@@ -17,8 +46,8 @@ const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET || '';
  * - decryptedData: The decrypted plaintext
  * 
  * Security:
+ * - Verifies staffAddress is an actual inspector/revenue employee ON-CHAIN
  * - Only works if ENCRYPTION_SECRET is configured
- * - Staff authorization can be verified on-chain if needed
  */
 export async function POST(request: NextRequest) {
     try {
@@ -40,15 +69,57 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // TODO: Add on-chain staff verification here
-        // For hackathon, we're trusting the frontend's role check
-        // In production, verify staffAddress is actually an inspector/revenue employee
-        // by calling the smart contract directly from the server
-
         if (!staffAddress) {
             return NextResponse.json(
                 { success: false, error: 'staffAddress is required for authorization' },
                 { status: 401 }
+            );
+        }
+
+        // SECURITY FIX: Verify staffAddress is actually authorized ON-CHAIN
+        const isAdmin = staffAddress.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+
+        let isAuthorizedStaff = isAdmin;
+
+        if (!isAdmin) {
+            try {
+                // Check if inspector
+                const inspectorLocation = await publicClient.readContract({
+                    address: LAND_REGISTRY_ADDRESS,
+                    abi: VERIFY_ABI,
+                    functionName: 'getInspectorLocation',
+                    args: [staffAddress as `0x${string}`],
+                });
+
+                if (Number(inspectorLocation) > 0) {
+                    isAuthorizedStaff = true;
+                } else {
+                    // Check if revenue employee
+                    const employeeDept = await publicClient.readContract({
+                        address: LAND_REGISTRY_ADDRESS,
+                        abi: VERIFY_ABI,
+                        functionName: 'getEmployeeRevenueDept',
+                        args: [staffAddress as `0x${string}`],
+                    });
+
+                    if (Number(employeeDept) > 0) {
+                        isAuthorizedStaff = true;
+                    }
+                }
+            } catch (contractErr) {
+                console.error('Staff verification failed:', contractErr);
+                // Fail closed - if we can't verify, deny access
+                return NextResponse.json(
+                    { success: false, error: 'Unable to verify staff authorization' },
+                    { status: 503 }
+                );
+            }
+        }
+
+        if (!isAuthorizedStaff) {
+            return NextResponse.json(
+                { success: false, error: 'Unauthorized: Only verified staff can decrypt sensitive data' },
+                { status: 403 }
             );
         }
 
@@ -68,3 +139,4 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+

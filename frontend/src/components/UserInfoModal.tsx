@@ -3,7 +3,7 @@
 import { useReadContract, usePublicClient } from "wagmi";
 import { USERS_ADDRESS, USERS_ABI } from "@/lib/contracts";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, User, Wallet, Calendar, Shield, CreditCard, Phone, Loader2 } from "lucide-react";
+import { X, User, Wallet, Calendar, Shield, CreditCard, Phone, Loader2, Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { resolveIPFS, UserProfile } from "@/lib/ipfs";
@@ -19,6 +19,12 @@ export function UserInfoModal({ isOpen, onClose, userAddress, isStaffView = fals
     const publicClient = usePublicClient();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+
+    // Decrypted values state
+    const [decryptedPAN, setDecryptedPAN] = useState<string | null>(null);
+    const [decryptedAadhaar, setDecryptedAadhaar] = useState<string | null>(null);
+    const [isDecrypting, setIsDecrypting] = useState(false);
+    const [decryptError, setDecryptError] = useState<string | null>(null);
 
     // Fetch user registration status
     const { data: isRegistered } = useReadContract({
@@ -43,6 +49,9 @@ export function UserInfoModal({ isOpen, onClose, userAddress, isStaffView = fals
         const fetchProfile = async () => {
             if (!userAddress || !isRegistered || !publicClient) return;
             setIsLoadingProfile(true);
+            setDecryptedPAN(null);
+            setDecryptedAadhaar(null);
+            setDecryptError(null);
             try {
                 const cid = await publicClient.readContract({
                     address: USERS_ADDRESS,
@@ -65,14 +74,93 @@ export function UserInfoModal({ isOpen, onClose, userAddress, isStaffView = fals
         fetchProfile();
     }, [userAddress, isRegistered, publicClient]);
 
+    // Decrypt encrypted fields when profile loads (for staff view)
+    useEffect(() => {
+        const decryptFields = async () => {
+            if (!profile || !isStaffView) return;
+
+            // Check if profile has encrypted fields
+            const hasEncryptedPAN = profile.panEncrypted && profile.panEncrypted.length > 0;
+            const hasEncryptedAadhaar = profile.aadhaarEncrypted && profile.aadhaarEncrypted.length > 0;
+
+            if (!hasEncryptedPAN && !hasEncryptedAadhaar) {
+                // Legacy profile - use plain values if available
+                if (profile.pan) setDecryptedPAN(profile.pan);
+                if (profile.aadhaar) setDecryptedAadhaar(profile.aadhaar);
+                return;
+            }
+
+            setIsDecrypting(true);
+            setDecryptError(null);
+
+            try {
+                // Import simple client-side decryption
+                const { decryptData } = await import("@/lib/simpleEncrypt");
+
+                // Decrypt PAN
+                if (hasEncryptedPAN) {
+                    const decrypted = decryptData(profile.panEncrypted!);
+                    if (decrypted) {
+                        setDecryptedPAN(decrypted);
+                    } else {
+                        setDecryptError('Failed to decrypt PAN');
+                    }
+                }
+
+                // Decrypt Aadhaar
+                if (hasEncryptedAadhaar) {
+                    const decrypted = decryptData(profile.aadhaarEncrypted!);
+                    if (decrypted) {
+                        setDecryptedAadhaar(decrypted);
+                    } else {
+                        setDecryptError('Failed to decrypt Aadhaar');
+                    }
+                }
+            } catch (e: any) {
+                console.error("Decryption error:", e);
+                setDecryptError(e.message || 'Decryption failed');
+            }
+            setIsDecrypting(false);
+        };
+
+        decryptFields();
+    }, [profile, isStaffView]);
+
     // Reset profile when modal closes
     useEffect(() => {
-        if (!isOpen) setProfile(null);
+        if (!isOpen) {
+            setProfile(null);
+            setDecryptedPAN(null);
+            setDecryptedAadhaar(null);
+            setDecryptError(null);
+        }
     }, [isOpen]);
 
     const formattedDate = createdTime
         ? new Date(Number(createdTime) * 1000).toLocaleString()
         : "N/A";
+
+    // Helper to get display value for PAN
+    const getDisplayPAN = () => {
+        if (isDecrypting) return "Decrypting...";
+        if (decryptedPAN) return decryptedPAN;
+        if (profile?.pan) return profile.pan; // Legacy
+        if (profile?.panMasked) return profile.panMasked; // Fallback to masked
+        return "Not available";
+    };
+
+    // Helper to get display value for Aadhaar
+    const getDisplayAadhaar = () => {
+        if (isDecrypting) return "Decrypting...";
+        if (decryptedAadhaar) return decryptedAadhaar;
+        if (profile?.aadhaar) return profile.aadhaar; // Legacy
+        if (profile?.aadhaarMasked) return profile.aadhaarMasked; // Fallback to masked
+        return "Not available";
+    };
+
+    // Check if values are decrypted (full) or masked
+    const isPANDecrypted = !!decryptedPAN || !!profile?.pan;
+    const isAadhaarDecrypted = !!decryptedAadhaar || !!profile?.aadhaar;
 
     return (
         <AnimatePresence>
@@ -154,15 +242,34 @@ export function UserInfoModal({ isOpen, onClose, userAddress, isStaffView = fals
                                     </div>
                                 ) : profile ? (
                                     <>
+                                        {/* Decryption Error */}
+                                        {decryptError && isStaffView && (
+                                            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-500 text-sm">
+                                                ⚠️ {decryptError} - Showing masked values
+                                            </div>
+                                        )}
+
                                         {/* PAN Card - Only show for staff */}
                                         {isStaffView && (
                                             <div className="space-y-2">
-                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                    <CreditCard className="w-4 h-4" />
-                                                    PAN Card
+                                                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                                    <div className="flex items-center gap-2">
+                                                        <CreditCard className="w-4 h-4" />
+                                                        PAN Card
+                                                    </div>
+                                                    {isPANDecrypted ? (
+                                                        <span className="text-xs text-green-500 flex items-center gap-1">
+                                                            <Unlock className="w-3 h-3" /> Decrypted
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-yellow-500 flex items-center gap-1">
+                                                            <Lock className="w-3 h-3" /> Masked
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <div className="p-3 bg-blue-500/10 rounded-lg font-mono text-sm text-blue-400 border border-blue-500/20">
-                                                    {profile.pan}
+                                                <div className="p-3 bg-blue-500/10 rounded-lg font-mono text-sm text-blue-400 border border-blue-500/20 flex items-center gap-2">
+                                                    {isDecrypting && <Loader2 className="w-3 h-3 animate-spin" />}
+                                                    {getDisplayPAN()}
                                                 </div>
                                             </div>
                                         )}
@@ -170,12 +277,24 @@ export function UserInfoModal({ isOpen, onClose, userAddress, isStaffView = fals
                                         {/* Aadhaar - Only show for staff */}
                                         {isStaffView && (
                                             <div className="space-y-2">
-                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                    <CreditCard className="w-4 h-4" />
-                                                    Aadhaar Number
+                                                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                                    <div className="flex items-center gap-2">
+                                                        <CreditCard className="w-4 h-4" />
+                                                        Aadhaar Number
+                                                    </div>
+                                                    {isAadhaarDecrypted ? (
+                                                        <span className="text-xs text-green-500 flex items-center gap-1">
+                                                            <Unlock className="w-3 h-3" /> Decrypted
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-yellow-500 flex items-center gap-1">
+                                                            <Lock className="w-3 h-3" /> Masked
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <div className="p-3 bg-purple-500/10 rounded-lg font-mono text-sm text-purple-400 border border-purple-500/20">
-                                                    {profile.aadhaar}
+                                                <div className="p-3 bg-purple-500/10 rounded-lg font-mono text-sm text-purple-400 border border-purple-500/20 flex items-center gap-2">
+                                                    {isDecrypting && <Loader2 className="w-3 h-3 animate-spin" />}
+                                                    {getDisplayAadhaar()}
                                                 </div>
                                             </div>
                                         )}
@@ -225,3 +344,4 @@ export function UserInfoModal({ isOpen, onClose, userAddress, isStaffView = fals
         </AnimatePresence>
     );
 }
+

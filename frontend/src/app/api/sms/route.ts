@@ -23,10 +23,10 @@ export async function POST(request: NextRequest) {
   console.log('   Final API Key exists:', !!FAST2SMS_API_KEY);
   console.log('   API Key length:', FAST2SMS_API_KEY?.length || 0);
   console.log('   API Key first 10 chars:', FAST2SMS_API_KEY?.substring(0, 10) || 'N/A');
-  
+
   try {
     const { mobile, otp } = await request.json();
-    console.log('📱 Mobile:', mobile, '| OTP:', otp);
+    console.log('📱 Sending OTP to mobile:', mobile);
 
     // Validate inputs
     if (!mobile || !otp) {
@@ -62,12 +62,12 @@ export async function POST(request: NextRequest) {
 
     // Send OTP via Fast2SMS Quick SMS route
     const message = `Your DivFlow verification code is: ${otp}. Valid for 5 minutes.`;
-    
+
     console.log('📤 Sending to Fast2SMS...');
     console.log('   URL: https://www.fast2sms.com/dev/bulkV2');
     console.log('   Route: q (Quick SMS)');
     console.log('   Number:', cleanMobile);
-    
+
     const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
       method: 'POST',
       headers: {
