@@ -502,23 +502,10 @@ export default function RegisterUser() {
           transition={{ duration: 0.6 }}
         >
           <GlassCard className="p-8">
-            {/* Demo Mode Toggle */}
-            <div className="flex items-center justify-between mb-6 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-yellow-500" />
-                <span className="text-sm text-yellow-500 font-medium">Demo Mode</span>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={demoMode}
-                  onChange={(e) => setDemoMode(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-secondary rounded-full peer peer-checked:bg-yellow-500 transition-colors">
-                  <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${demoMode ? 'translate-x-5' : ''}`} />
-                </div>
-              </label>
+            {/* Demo Mode Notice - Always enabled for hackathon */}
+            <div className="flex items-center gap-2 mb-6 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+              <Shield className="w-4 h-4 text-green-500" />
+              <span className="text-sm text-green-500 font-medium">Demo Mode Active - OTP will be shown on screen</span>
             </div>
 
             <div className="text-center mb-8">

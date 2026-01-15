@@ -3,7 +3,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, useEffect, type ReactNode } from 'react'
 import { WagmiProvider } from 'wagmi'
-import { IPFSProvider } from '@/contexts/IPFSContext'
 
 import { config } from '@/lib/config'
 
@@ -11,7 +10,7 @@ import { config } from '@/lib/config'
 const BASE_SEPOLIA_CHAIN = {
   chainId: '0x14A34', // 84532 in hex
   chainName: 'Base Sepolia',
-  rpcUrls: ['https://sepolia.base.org'],
+  rpcUrls: [process.env.NEXT_PUBLIC_ALCHEMY_RPC_URL || 'https://sepolia.base.org'],
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   blockExplorerUrls: ['https://sepolia.basescan.org'],
 };
@@ -53,9 +52,7 @@ export function Providers(props: { children: ReactNode }) {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <IPFSProvider>
-          {props.children}
-        </IPFSProvider>
+        {props.children}
       </QueryClientProvider>
     </WagmiProvider>
   )

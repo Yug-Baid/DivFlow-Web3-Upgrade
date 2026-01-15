@@ -120,7 +120,7 @@ export const HeroSection = () => {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8"
           >
             <Link href={buttonHref}>
               <Button variant="hero" size="lg" className="group shadow-glow">
@@ -128,6 +128,53 @@ export const HeroSection = () => {
                 <ButtonIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
+          </motion.div>
+
+          {/* Network Helper Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.35 }}
+            className="flex flex-wrap items-center justify-center gap-3 mb-16 p-4 bg-secondary/20 backdrop-blur-md rounded-xl border border-border/30"
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (typeof window !== 'undefined' && window.ethereum) {
+                  try {
+                    await window.ethereum.request({
+                      method: 'wallet_addEthereumChain',
+                      params: [{
+                        chainId: '0x14A34',
+                        chainName: 'Base Sepolia',
+                        rpcUrls: ['https://sepolia.base.org'],
+                        nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+                        blockExplorerUrls: ['https://sepolia.basescan.org'],
+                      }],
+                    });
+                  } catch (e) {
+                    console.error('Failed to add network:', e);
+                  }
+                }
+              }}
+              className="text-xs bg-primary/10 border-primary/30 hover:bg-primary/20"
+            >
+              ➕ Add Base Sepolia Network
+            </Button>
+            <span className="text-muted-foreground/50">|</span>
+            <span className="text-xs text-muted-foreground">Faucets:</span>
+            <a href="https://www.alchemy.com/faucets/base-sepolia" target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+              Alchemy
+            </a>
+            <a href="https://faucet.quicknode.com/base/sepolia" target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+              QuickNode
+            </a>
+            <span className="text-muted-foreground/50">|</span>
+            <span className="text-xs text-muted-foreground">Bridge:</span>
+            <a href="https://testnets.superbridge.app/base-sepolia" target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+              Superbridge (ETH → Base)
+            </a>
           </motion.div>
 
           {/* Stats */}
