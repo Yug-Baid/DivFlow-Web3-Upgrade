@@ -311,7 +311,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Quick Actions */}
-        <div className="flex flex-wrap gap-4 mb-8">
+        <div className="flex flex-wrap gap-4 mb-4">
           <Link href="/register-land">
             <Button variant="hero">
               <Plus className="w-4 h-4 mr-2" />
@@ -330,6 +330,47 @@ export default function Dashboard() {
               Manage Sales
             </Button>
           </Link>
+        </div>
+
+        {/* Network & Faucet Helper */}
+        <div className="flex flex-wrap items-center gap-3 mb-8 p-3 bg-secondary/30 rounded-lg border border-border/50">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              if (typeof window !== 'undefined' && window.ethereum) {
+                try {
+                  await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [{
+                      chainId: '0x14A34',
+                      chainName: 'Base Sepolia',
+                      rpcUrls: ['https://sepolia.base.org'],
+                      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+                      blockExplorerUrls: ['https://sepolia.basescan.org'],
+                    }],
+                  });
+                } catch (e) {
+                  console.error('Failed to add network:', e);
+                }
+              }
+            }}
+            className="text-xs"
+          >
+            ➕ Add Base Sepolia to MetaMask
+          </Button>
+          <span className="text-muted-foreground text-xs">|</span>
+          <span className="text-xs text-muted-foreground">Get testnet ETH:</span>
+          <a href="https://www.alchemy.com/faucets/base-sepolia" target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+            Alchemy Faucet
+          </a>
+          <a href="https://faucet.quicknode.com/base/sepolia" target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+            QuickNode Faucet
+          </a>
+          <span className="text-xs text-muted-foreground">| Bridge:</span>
+          <a href="https://testnets.superbridge.app/base-sepolia" target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+            Superbridge (Sepolia → Base)
+          </a>
         </div>
 
         <div className="mb-8">
@@ -403,10 +444,13 @@ export default function Dashboard() {
                             <span className="text-muted-foreground">Area</span>
                             <span className="font-mono text-foreground">{property.area.toString()} sq.ft</span>
                           </div>
-                          <div className="flex justify-between text-sm pt-2 border-t border-border/50 mt-2">
-                            <span className="text-muted-foreground">Est. Value</span>
-                            <EthPriceDisplay ethAmount={property.price} size="sm" showSymbol />
-                          </div>
+                          {/* Only show Est. Value if property has been listed for sale (price > 0) */}
+                          {Number(property.price) > 0 && (
+                            <div className="flex justify-between text-sm pt-2 border-t border-border/50 mt-2">
+                              <span className="text-muted-foreground">Est. Value</span>
+                              <EthPriceDisplay ethAmount={property.price} size="sm" showSymbol />
+                            </div>
+                          )}
                         </div>
                       </div>
 

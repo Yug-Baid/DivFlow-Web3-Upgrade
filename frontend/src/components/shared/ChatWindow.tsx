@@ -68,8 +68,8 @@ export function ChatWindow({
         {messages.length === 0 && status === 'synced' && (
           <div className="text-center py-10 text-muted-foreground text-sm">
             <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
-            <p>Secure P2P Channel Established</p>
-            <p className="text-xs mt-1">Messages are stored on IPFS/OrbitDB</p>
+            <p>Chat Ready</p>
+            <p className="text-xs mt-1">Messages sync instantly via Firebase</p>
           </div>
         )}
 

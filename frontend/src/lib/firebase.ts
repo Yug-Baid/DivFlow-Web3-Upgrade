@@ -1,0 +1,82 @@
+import { initializeApp, getApps } from 'firebase/app';
+import { getDatabase, ref, push, onValue, query, orderByChild, limitToLast, off } from 'firebase/database';
+
+// Firebase configuration from environment variables
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
+
+// Initialize Firebase only once
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const database = getDatabase(app);
+
+export interface ChatMessage {
+  id?: string;
+  sender: string;
+  content: string;
+  timestamp: number;
+}
+
+/**
+ * Send a message to a property chat
+ */
+export async function sendMessage(propertyId: string, sender: string, content: string): Promise<void> {
+  const messagesRef = ref(database, `chats/${propertyId}/messages`);
+  await push(messagesRef, {
+    sender,
+    content,
+    timestamp: Date.now(),
+  });
+}
+
+/**
+ * Subscribe to messages for a property chat
+ * Returns an unsubscribe function
+ */
+export function subscribeToMessages(
+  propertyId: string,
+  callback: (messages: ChatMessage[]) => void
+): () => void {
+  const messagesRef = ref(database, `chats/${propertyId}/messages`);
+  const messagesQuery = query(messagesRef, orderByChild('timestamp'), limitToLast(100));
+
+  const handleValue = (snapshot: any) => {
+    const messages: ChatMessage[] = [];
+    if (snapshot.exists()) {
+      snapshot.forEach((child: any) => {
+        messages.push({
+          id: child.key,
+          ...child.val(),
+        });
+      });
+    }
+    // Sort by timestamp (ascending)
+    messages.sort((a, b) => a.timestamp - b.timestamp);
+    callback(messages);
+  };
+
+  onValue(messagesQuery, handleValue);
+
+  // Return unsubscribe function
+  return () => off(messagesQuery, 'value', handleValue);
+}
+
+/**
+ * Set chat participants (for reference)
+ */
+export async function setChatParticipants(
+  propertyId: string,
+  inspector: string,
+  revenue: string
+): Promise<void> {
+  const participantsRef = ref(database, `chats/${propertyId}/participants`);
+  await push(participantsRef, { inspector, revenue });
+}
+
+export { database };
