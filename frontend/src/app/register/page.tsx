@@ -314,17 +314,28 @@ export default function RegisterUser() {
       }
 
       // IPFS: Upload user profile for staff visibility
+      // Using simple client-side encryption for Aadhaar/PAN
       const { uploadUserProfile } = await import("@/lib/ipfs");
+      const { encryptData, maskAadhaar, maskPAN } = await import("@/lib/simpleEncrypt");
+
+      // Encrypt sensitive data client-side
+      const panEncrypted = encryptData(formData.pan);
+      const aadhaarEncrypted = encryptData(formData.aadhar);
+
+      console.log("✅ Encryption:", panEncrypted ? "successful" : "failed");
+
       const userProfile = {
         walletAddress: address,
         firstName: formData.fname,
         lastName: formData.lname,
-        pan: formData.pan,
+        // Store encrypted versions (if available) or empty for security
+        panEncrypted: panEncrypted || "",
         panMasked: `XXXXXX${formData.pan.slice(-4)}`,
-        aadhaar: formData.aadhar,
+        aadhaarEncrypted: aadhaarEncrypted || "",
         aadhaarMasked: `XXXX XXXX ${formData.aadhar.slice(-4)}`,
         mobile: formData.mobile,
         registeredAt: Date.now(),
+        encryptionVersion: panEncrypted ? 1 : 0, // Track if encrypted
       };
 
       const uploadResult = await uploadUserProfile(userProfile);
