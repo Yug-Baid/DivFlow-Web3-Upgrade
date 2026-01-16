@@ -492,11 +492,11 @@ function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, 
                                 <Check className="w-3 h-3" />
                                 Offer Accepted - Awaiting Payment
                             </p>
-                            <div className="flex flex-wrap items-center gap-4 text-sm">
-                                <div>
-                                    <span className="text-muted-foreground mr-2">Buyer:</span>
-                                    <span className="font-mono text-foreground">
-                                        {sale.acceptedFor?.slice(0, 8)}...{sale.acceptedFor?.slice(-6)}
+                            <div className="flex flex-col gap-2 text-sm">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                                    <span className="text-muted-foreground">Buyer:</span>
+                                    <span className="font-mono text-foreground break-all">
+                                        {sale.acceptedFor}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-1">
@@ -519,18 +519,22 @@ function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, 
 
             {/* Show completion info when sale succeeded (state === 3) */}
             {sale.state === 3 && (
-                <div className="p-4 bg-secondary/30 border-b border-border/50 flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex flex-col gap-1 w-full md:w-auto">
-                        <div className="flex items-center gap-2 text-sm overflow-hidden">
-                            <Check className="w-4 h-4 text-green-500 shrink-0" />
-                            <span className="text-muted-foreground whitespace-nowrap">Sold to</span>
-                            <span className="font-mono text-foreground font-bold break-all">
+                <div className="p-4 bg-secondary/30 border-b border-border/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div className="flex flex-col gap-2 w-full md:w-auto">
+                        <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-1 sm:gap-2 text-sm">
+                            <div className="flex items-center gap-2">
+                                <Check className="w-4 h-4 text-green-500 shrink-0" />
+                                <span className="text-muted-foreground">Sold to</span>
+                            </div>
+                            <span className="font-mono text-foreground font-bold break-all ml-6 sm:ml-0">
                                 {sale.acceptedFor}
                             </span>
-                            <span className="text-muted-foreground whitespace-nowrap">for</span>
-                            <span className="font-mono text-green-400 font-bold whitespace-nowrap">
-                                {formatEther(sale.acceptedPrice)} ETH
-                            </span>
+                            <div className="flex items-center gap-1 ml-6 sm:ml-0">
+                                <span className="text-muted-foreground">for</span>
+                                <span className="font-mono text-green-400 font-bold">
+                                    {formatEther(sale.acceptedPrice)} ETH
+                                </span>
+                            </div>
                         </div>
                         {/* Transaction Hash Display */}
                         {txHash && (
@@ -576,20 +580,17 @@ function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, 
                         <div className="space-y-3">
                             {/* F8 FIX: Only show highest bid per buyer, sorted by price descending */}
                             {highestBidsPerBuyer.map((req: any, idx: number) => (
-                                <div key={idx} className="flex justify-between items-center bg-secondary/30 p-4 rounded-xl border border-border/50 transition-colors hover:bg-secondary/50">
-                                    <div className="flex flex-col gap-1">
-                                        <p className="text-sm">
+                                <div key={idx} className="flex flex-col md:flex-row justify-between md:items-center gap-4 bg-secondary/30 p-4 rounded-xl border border-border/50 transition-colors hover:bg-secondary/50">
+                                    <div className="flex flex-col gap-2 flex-1 min-w-0">
+                                        <div className="text-sm">
                                             <span className="text-muted-foreground mr-2">Buyer:</span>
-                                            <span className="font-mono text-foreground">{req.user.slice(0, 6)}...{req.user.slice(-4)}</span>
-                                        </p>
-                                        <p className="text-sm">
-                                            <span className="text-muted-foreground mr-2">Offer:</span>
+                                            <span className="font-mono text-foreground break-all">{req.user}</span>
+                                        </div>
+                                        <div className="text-sm flex items-center flex-wrap gap-2">
+                                            <span className="text-muted-foreground">Offer:</span>
                                             <span className="font-mono text-primary font-bold">{formatEther(req.priceOffered)} ETH</span>
-                                            {idx === 0 && <span className="ml-2 text-xs bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded">Highest</span>}
-                                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-2" title={req.user}>
-                                                <Info className="w-3 h-3 text-muted-foreground" />
-                                            </Button>
-                                        </p>
+                                            {idx === 0 && <span className="text-xs bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded">Highest</span>}
+                                        </div>
                                     </div>
 
                                     {/* F7 FIX: Show proper button states */}

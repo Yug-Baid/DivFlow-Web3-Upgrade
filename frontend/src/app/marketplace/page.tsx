@@ -272,7 +272,7 @@ export default function Marketplace() {
       </div>
 
       {/* Controls Bar */}
-      <GlassCard className="p-4 mb-8 flex flex-col md:flex-row gap-4 items-center justify-between sticky top-20 z-10 backdrop-blur-xl">
+      <GlassCard className="p-4 mb-8 flex flex-col md:flex-row gap-4 items-center justify-between backdrop-blur-xl">
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
