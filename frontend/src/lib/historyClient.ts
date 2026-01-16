@@ -28,7 +28,14 @@ export const FALLBACK_RPCS = [
 export const DEPLOYMENT_BLOCK = BigInt(36275482);
 
 /**
+ * Max block range per query to avoid RPC limits
+ * Most public RPCs limit to 50k-100k blocks, using 40k to be safe
+ */
+const MAX_BLOCK_RANGE = BigInt(40000);
+
+/**
  * Fetch contract events with retry logic using fallback RPCs
+ * Batches queries into smaller block ranges to avoid RPC limits
  */
 export async function fetchHistoryEvents(
   address: `0x${string}`,
@@ -44,15 +51,50 @@ export async function fetchHistoryEvents(
         transport: http(rpc),
       });
       
-      const logs = await client.getContractEvents({
-        address,
-        abi,
-        eventName,
-        args,
-        fromBlock,
-      });
+      // Get current block number
+      const currentBlock = await client.getBlockNumber();
       
-      return logs;
+      // If range is within limit, do single query
+      if (currentBlock - fromBlock <= MAX_BLOCK_RANGE) {
+        const logs = await client.getContractEvents({
+          address,
+          abi,
+          eventName,
+          args,
+          fromBlock,
+        });
+        return logs;
+      }
+      
+      // Batch queries for large block ranges
+      const allLogs: any[] = [];
+      let startBlock = fromBlock;
+      
+      while (startBlock < currentBlock) {
+        const endBlock = startBlock + MAX_BLOCK_RANGE > currentBlock 
+          ? currentBlock 
+          : startBlock + MAX_BLOCK_RANGE;
+        
+        try {
+          const logs = await client.getContractEvents({
+            address,
+            abi,
+            eventName,
+            args,
+            fromBlock: startBlock,
+            toBlock: endBlock,
+          });
+          
+          allLogs.push(...logs);
+        } catch (batchError) {
+          console.warn(`Batch ${startBlock}-${endBlock} failed for ${eventName}:`, batchError);
+          // Continue to next batch even if one fails
+        }
+        
+        startBlock = endBlock + BigInt(1);
+      }
+      
+      return allLogs;
     } catch (error) {
       console.warn(`RPC ${rpc} failed for ${eventName}, trying next...`, error);
       continue;
