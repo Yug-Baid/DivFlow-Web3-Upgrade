@@ -12,9 +12,9 @@ export default function Home() {
       <Navbar />
       <main>
         <HeroSection />
+        <MarketplaceSection />
         <FeaturesSection />
         <HowItWorksSection />
-        <MarketplaceSection />
         <SecuritySection />
       </main>
       <Footer />

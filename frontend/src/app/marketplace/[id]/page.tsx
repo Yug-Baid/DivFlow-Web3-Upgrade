@@ -30,6 +30,7 @@ export default function PropertyDetailsPage({ params }: { params: { id: string }
     const [selectedUserAddress, setSelectedUserAddress] = useState<string | null>(null);
     const [historyEvents, setHistoryEvents] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null); // For image gallery
 
     useEffect(() => {
         setIsMounted(true);
@@ -211,14 +212,14 @@ export default function PropertyDetailsPage({ params }: { params: { id: string }
 
                 {/* Left Column: Images & Map */}
                 <div className="lg:col-span-2 space-y-6">
-                    {/* Main Cover Image */}
+                    {/* Main Cover Image - Shows selected image or default cover */}
                     <GlassCard className="p-2 overflow-hidden relative aspect-video group">
-                        {metadata?.image ? (
+                        {(selectedImage || metadata?.image) ? (
                             <Image
-                                src={getIPFSUrl(metadata.image)}
-                                alt={metadata.name || "Property"}
+                                src={getIPFSUrl(selectedImage || metadata?.image || "")}
+                                alt={metadata?.name || "Property"}
                                 fill
-                                className="object-cover rounded-lg"
+                                className="object-cover rounded-lg transition-transform duration-300"
                                 unoptimized
                             />
                         ) : (
@@ -235,12 +236,46 @@ export default function PropertyDetailsPage({ params }: { params: { id: string }
                         )}
                     </GlassCard>
 
-                    {/* Photo Gallery (if extra photos exist) */}
-                    {metadata?.properties?.photos && metadata.properties.photos.length > 0 && (
+                    {/* Photo Gallery - Clickable thumbnails */}
+                    {metadata && (metadata.image || (metadata.properties?.photos && metadata.properties.photos.length > 0)) && (
                         <div className="grid grid-cols-4 gap-4">
-                            {metadata.properties.photos.map((photo, i) => (
-                                <div key={i} className="aspect-square relative rounded-lg overflow-hidden border border-border cursor-pointer hover:opacity-80 transition-opacity">
-                                    <Image src={getIPFSUrl(photo)} alt={`Photo ${i}`} fill className="object-cover" unoptimized />
+                            {/* Cover image as first thumbnail */}
+                            {metadata.image && (
+                                <div 
+                                    onClick={() => setSelectedImage(metadata.image)}
+                                    className={`aspect-square relative rounded-lg overflow-hidden border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
+                                        (!selectedImage || selectedImage === metadata.image) 
+                                            ? 'border-primary ring-2 ring-primary/30' 
+                                            : 'border-border hover:border-primary/50'
+                                    }`}
+                                >
+                                    <Image 
+                                        src={getIPFSUrl(metadata.image)} 
+                                        alt="Cover" 
+                                        fill 
+                                        className="object-cover" 
+                                        unoptimized 
+                                    />
+                                </div>
+                            )}
+                            {/* Additional photos */}
+                            {metadata.properties?.photos?.map((photo, i) => (
+                                <div 
+                                    key={i} 
+                                    onClick={() => setSelectedImage(photo)}
+                                    className={`aspect-square relative rounded-lg overflow-hidden border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
+                                        selectedImage === photo 
+                                            ? 'border-primary ring-2 ring-primary/30' 
+                                            : 'border-border hover:border-primary/50'
+                                    }`}
+                                >
+                                    <Image 
+                                        src={getIPFSUrl(photo)} 
+                                        alt={`Photo ${i + 1}`} 
+                                        fill 
+                                        className="object-cover" 
+                                        unoptimized 
+                                    />
                                 </div>
                             ))}
                         </div>
@@ -346,7 +381,19 @@ export default function PropertyDetailsPage({ params }: { params: { id: string }
                                 <Button
                                     variant="outline"
                                     className="w-full justify-start"
-                                    onClick={() => window.open(getIPFSUrl(metadata.properties.deed), '_blank')}
+                                    onClick={() => {
+                                        // Check if user is registered before allowing deed access
+                                        if (!address) {
+                                            alert('Please connect your wallet to view the deed.');
+                                            return;
+                                        }
+                                        if (!isRegistered && !isStaff) {
+                                            // Redirect to register page
+                                            router.push('/register');
+                                            return;
+                                        }
+                                        window.open(getIPFSUrl(metadata.properties.deed), '_blank');
+                                    }}
                                 >
                                     <FileText className="w-4 h-4 mr-2" /> View Official Deed (PDF)
                                 </Button>

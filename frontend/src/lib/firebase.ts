@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getDatabase, ref, push, onValue, query, orderByChild, limitToLast, off } from 'firebase/database';
+import { getDatabase, ref, push, onValue, query, orderByChild, limitToLast, off, get, remove } from 'firebase/database';
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -132,6 +132,34 @@ export function subscribeToMessageRequests(
   onValue(requestsQuery, handleValue);
 
   return () => off(requestsQuery, 'value', handleValue);
+}
+
+/**
+ * Clear all message requests from a specific sender after accepting
+ * This prevents duplicate accept buttons from appearing
+ */
+export async function clearMessageRequestsFrom(
+  userAddress: string,
+  senderAddress: string
+): Promise<void> {
+  const requestsRef = ref(database, `message-requests/${userAddress.toLowerCase()}`);
+  
+  try {
+    const snapshot = await get(requestsRef);
+    if (snapshot.exists()) {
+      const updates: Promise<void>[] = [];
+      snapshot.forEach((child) => {
+        const val = child.val();
+        if (val.from && val.from.toLowerCase() === senderAddress.toLowerCase()) {
+          // Remove this request
+          updates.push(remove(ref(database, `message-requests/${userAddress.toLowerCase()}/${child.key}`)));
+        }
+      });
+      await Promise.all(updates);
+    }
+  } catch (error) {
+    console.error('Failed to clear message requests:', error);
+  }
 }
 
 export { database };

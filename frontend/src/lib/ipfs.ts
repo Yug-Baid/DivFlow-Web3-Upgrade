@@ -44,7 +44,7 @@ export interface UserProfile {
     aadhaarMasked: string; // XXXX XXXX 1234
     mobile: string;
     registeredAt: number;  // Unix timestamp
-    encryptionVersion?: number; // 0 = no encryption, 1 = AES-256-GCM
+    encryptionVersion?: number; // 0 = no encryption, 1 = XOR (legacy), 2 = AES-256-GCM (secure, server-side)
 }
 
 /**

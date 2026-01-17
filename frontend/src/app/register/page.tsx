@@ -314,28 +314,47 @@ export default function RegisterUser() {
       }
 
       // IPFS: Upload user profile for staff visibility
-      // Using simple client-side encryption for Aadhaar/PAN
+      // Using server-side AES-256-GCM encryption for Aadhaar/PAN (secure!)
       const { uploadUserProfile } = await import("@/lib/ipfs");
-      const { encryptData, maskAadhaar, maskPAN } = await import("@/lib/simpleEncrypt");
 
-      // Encrypt sensitive data client-side
-      const panEncrypted = encryptData(formData.pan);
-      const aadhaarEncrypted = encryptData(formData.aadhar);
+      // Helper: Encrypt data via server-side API (key never leaves server)
+      const encryptOnServer = async (data: string): Promise<string> => {
+        try {
+          const response = await fetch('/api/encrypt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data }),
+          });
+          const result = await response.json();
+          if (!result.success) {
+            console.warn('Server encryption failed:', result.error);
+            return '';
+          }
+          return result.encrypted;
+        } catch (error) {
+          console.warn('Server encryption error:', error);
+          return '';
+        }
+      };
 
-      console.log("✅ Encryption:", panEncrypted ? "successful" : "failed");
+      // Encrypt sensitive data via server (AES-256-GCM)
+      const panEncrypted = await encryptOnServer(formData.pan);
+      const aadhaarEncrypted = await encryptOnServer(formData.aadhar);
+
+      console.log("✅ AES-256-GCM Encryption:", panEncrypted ? "successful" : "failed (using masked only)");
 
       const userProfile = {
         walletAddress: address,
         firstName: formData.fname,
         lastName: formData.lname,
-        // Store encrypted versions (if available) or empty for security
+        // Store AES-256-GCM encrypted versions (decryptable only by staff)
         panEncrypted: panEncrypted || "",
         panMasked: `XXXXXX${formData.pan.slice(-4)}`,
         aadhaarEncrypted: aadhaarEncrypted || "",
         aadhaarMasked: `XXXX XXXX ${formData.aadhar.slice(-4)}`,
         mobile: formData.mobile,
         registeredAt: Date.now(),
-        encryptionVersion: panEncrypted ? 1 : 0, // Track if encrypted
+        encryptionVersion: panEncrypted ? 2 : 0, // Version 2 = server-side AES-256-GCM
       };
 
       const uploadResult = await uploadUserProfile(userProfile);

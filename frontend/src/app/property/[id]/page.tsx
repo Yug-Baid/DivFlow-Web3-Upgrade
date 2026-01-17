@@ -45,6 +45,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
   const [metadata, setMetadata] = useState<PropertyMetadata | null>(null);
   const [historyEvents, setHistoryEvents] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null); // For image gallery
 
   useEffect(() => {
     setIsMounted(true);
@@ -182,14 +183,14 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column: Images & Map */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Main Cover Image */}
+            {/* Main Cover Image - Shows selected or default */}
             <GlassCard className="p-2 overflow-hidden relative aspect-video group">
-              {metadata?.image ? (
+              {(selectedImage || metadata?.image) ? (
                 <Image
-                  src={getIPFSUrl(metadata.image)}
-                  alt={metadata.name || "Property"}
+                  src={getIPFSUrl(selectedImage || metadata?.image || "")}
+                  alt={metadata?.name || "Property"}
                   fill
-                  className="object-cover rounded-lg"
+                  className="object-cover rounded-lg transition-transform duration-300"
                   unoptimized
                 />
               ) : (
@@ -210,12 +211,34 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
               )}
             </GlassCard>
 
-            {/* Photo Gallery */}
-            {metadata?.properties?.photos && metadata.properties.photos.length > 0 && (
+            {/* Photo Gallery - Clickable Thumbnails */}
+            {metadata && (metadata.image || (metadata.properties?.photos && metadata.properties.photos.length > 0)) && (
               <div className="grid grid-cols-4 gap-4">
-                {metadata.properties.photos.map((photo, i) => (
-                  <div key={i} className="aspect-square relative rounded-lg overflow-hidden border border-border cursor-pointer hover:opacity-80 transition-opacity">
-                    <Image src={getIPFSUrl(photo)} alt={`Photo ${i}`} fill className="object-cover" unoptimized />
+                {/* Cover image as first thumbnail */}
+                {metadata.image && (
+                  <div 
+                    onClick={() => setSelectedImage(metadata.image)}
+                    className={`aspect-square relative rounded-lg overflow-hidden border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
+                      (!selectedImage || selectedImage === metadata.image) 
+                        ? 'border-primary ring-2 ring-primary/30' 
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                  >
+                    <Image src={getIPFSUrl(metadata.image)} alt="Cover" fill className="object-cover" unoptimized />
+                  </div>
+                )}
+                {/* Additional photos */}
+                {metadata.properties?.photos?.map((photo, i) => (
+                  <div 
+                    key={i}
+                    onClick={() => setSelectedImage(photo)}
+                    className={`aspect-square relative rounded-lg overflow-hidden border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
+                      selectedImage === photo 
+                        ? 'border-primary ring-2 ring-primary/30' 
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                  >
+                    <Image src={getIPFSUrl(photo)} alt={`Photo ${i + 1}`} fill className="object-cover" unoptimized />
                   </div>
                 ))}
               </div>

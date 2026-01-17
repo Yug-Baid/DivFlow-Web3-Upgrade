@@ -5,7 +5,7 @@ import { useAccount } from "wagmi";
 import { DashboardLayout } from "@/components/shared/DashboardLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { ChatWindow, ChatMessage } from "@/components/shared/ChatWindow";
-import { sendMessage as firebaseSendMessage, subscribeToMessages, sendMessageRequest, subscribeToMessageRequests } from "@/lib/firebase";
+import { sendMessage as firebaseSendMessage, subscribeToMessages, sendMessageRequest, subscribeToMessageRequests, clearMessageRequestsFrom } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, MessageSquare, Hash, Zap, UserPlus } from "lucide-react";
@@ -48,10 +48,15 @@ export default function GlobalChatPage() {
         if (!address) return;
 
         const unsubscribe = subscribeToMessageRequests(address, (requests) => {
-            // Filter out contacts we already have
+            // Filter out contacts we already have (case-insensitive check)
+            const existingContactsLower = contacts.map(c => c.toLowerCase());
             const newRequests = requests
                 .map(r => r.from)
-                .filter(from => !contacts.includes(from) && from.toLowerCase() !== address.toLowerCase());
+                .filter(from => {
+                    const fromLower = from.toLowerCase();
+                    // Must NOT be in existing contacts AND must NOT be self
+                    return !existingContactsLower.includes(fromLower) && fromLower !== address.toLowerCase();
+                });
             setPendingRequests(newRequests);
         });
 
@@ -178,7 +183,7 @@ export default function GlobalChatPage() {
     }, [address, activeContact]);
 
     // Accept a message request and add to contacts
-    const acceptRequest = useCallback((from: string) => {
+    const acceptRequest = useCallback(async (from: string) => {
         if (!address) return;
         
         if (!contacts.includes(from)) {
@@ -187,8 +192,16 @@ export default function GlobalChatPage() {
             localStorage.setItem(`divflow-contacts-${address.toLowerCase()}`, JSON.stringify(updated));
         }
         
-        // Remove from pending
+        // Remove from pending UI
         setPendingRequests(prev => prev.filter(r => r.toLowerCase() !== from.toLowerCase()));
+        
+        // Remove from Firebase to prevent reappearance
+        try {
+            await clearMessageRequestsFrom(address, from);
+        } catch (e) {
+            console.error("Failed to clear message request:", e);
+        }
+
         setActiveContact(from);
     }, [address, contacts]);
 
