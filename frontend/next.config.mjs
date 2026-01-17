@@ -5,6 +5,7 @@ const nextConfig = {
   env: {
     PINATA_JWT: process.env.PINATA_JWT,
     PINATA_GROUP_ID: process.env.PINATA_GROUP_ID,
+    ENCRYPTION_SECRET: process.env.ENCRYPTION_SECRET,
   },
   webpack: (config, { webpack }) => {
     config.plugins.push(

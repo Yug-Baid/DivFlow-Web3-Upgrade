@@ -34,6 +34,7 @@ export function PropertyDetailsModal({ isOpen, onClose, property }: PropertyDeta
     const [metadata, setMetadata] = useState<PropertyMetadata | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedUserAddress, setSelectedUserAddress] = useState<string | null>(null);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null); // For image gallery
 
     // Fetch metadata when property changes
     useEffect(() => {
@@ -55,10 +56,12 @@ export function PropertyDetailsModal({ isOpen, onClose, property }: PropertyDeta
         }
     }, [isOpen, property]);
 
+
     // Reset when closed
     useEffect(() => {
         if (!isOpen) {
             setMetadata(null);
+            setSelectedImage(null);
         }
     }, [isOpen]);
 
@@ -113,16 +116,49 @@ export function PropertyDetailsModal({ isOpen, onClose, property }: PropertyDeta
                                     </div>
                                 ) : (
                                     <div className="p-4 space-y-4">
-                                        {/* Cover Image */}
-                                        {metadata?.image && (
+                                        {/* Main Image - Shows selected or cover */}
+                                        {(selectedImage || metadata?.image) && (
                                             <div className="relative aspect-video rounded-lg overflow-hidden border border-border">
                                                 <Image
-                                                    src={getIPFSUrl(metadata.image)}
-                                                    alt={metadata.name || "Property"}
+                                                    src={getIPFSUrl(selectedImage || metadata?.image || "")}
+                                                    alt={metadata?.name || "Property"}
                                                     fill
-                                                    className="object-cover"
+                                                    className="object-cover transition-transform duration-300"
                                                     unoptimized
                                                 />
+                                            </div>
+                                        )}
+
+                                        {/* Thumbnail Gallery - Clickable */}
+                                        {metadata && (metadata.image || (metadata.properties?.photos && metadata.properties.photos.length > 0)) && (
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {/* Cover as first thumbnail */}
+                                                {metadata.image && (
+                                                    <div 
+                                                        onClick={() => setSelectedImage(metadata.image)}
+                                                        className={`aspect-square relative rounded-md overflow-hidden border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
+                                                            (!selectedImage || selectedImage === metadata.image) 
+                                                                ? 'border-primary ring-2 ring-primary/30' 
+                                                                : 'border-border hover:border-primary/50'
+                                                        }`}
+                                                    >
+                                                        <Image src={getIPFSUrl(metadata.image)} alt="Cover" fill className="object-cover" unoptimized />
+                                                    </div>
+                                                )}
+                                                {/* Additional photos */}
+                                                {metadata.properties?.photos?.map((photo, i) => (
+                                                    <div 
+                                                        key={i}
+                                                        onClick={() => setSelectedImage(photo)}
+                                                        className={`aspect-square relative rounded-md overflow-hidden border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
+                                                            selectedImage === photo 
+                                                                ? 'border-primary ring-2 ring-primary/30' 
+                                                                : 'border-border hover:border-primary/50'
+                                                        }`}
+                                                    >
+                                                        <Image src={getIPFSUrl(photo)} alt={`Photo ${i + 1}`} fill className="object-cover" unoptimized />
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
 

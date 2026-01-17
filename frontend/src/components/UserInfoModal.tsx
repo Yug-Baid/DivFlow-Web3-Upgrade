@@ -1,6 +1,6 @@
 "use client";
 
-import { useReadContract, usePublicClient } from "wagmi";
+import { useReadContract, usePublicClient, useAccount } from "wagmi";
 import { USERS_ADDRESS, USERS_ABI } from "@/lib/contracts";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, User, Wallet, Calendar, Shield, CreditCard, Phone, Loader2, Lock, Unlock } from "lucide-react";
@@ -17,6 +17,7 @@ interface UserInfoModalProps {
 
 export function UserInfoModal({ isOpen, onClose, userAddress, isStaffView = false }: UserInfoModalProps) {
     const publicClient = usePublicClient();
+    const { address: connectedAddress } = useAccount(); // Connected staff wallet for authorization
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
@@ -77,7 +78,7 @@ export function UserInfoModal({ isOpen, onClose, userAddress, isStaffView = fals
     // Decrypt encrypted fields when profile loads (for staff view)
     useEffect(() => {
         const decryptFields = async () => {
-            if (!profile || !isStaffView) return;
+            if (!profile || !isStaffView || !connectedAddress) return;
 
             // Check if profile has encrypted fields
             const hasEncryptedPAN = profile.panEncrypted && profile.panEncrypted.length > 0;
@@ -93,27 +94,78 @@ export function UserInfoModal({ isOpen, onClose, userAddress, isStaffView = fals
             setIsDecrypting(true);
             setDecryptError(null);
 
+            // Helper: Decrypt via server-side API (role-verified)
+            const decryptOnServer = async (encryptedData: string): Promise<string | null> => {
+                try {
+                    const response = await fetch('/api/decrypt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            encryptedData,
+                            walletAddress: connectedAddress,
+                        }),
+                    });
+                    const result = await response.json();
+                    if (!result.success) {
+                        console.warn('Server decryption failed:', result.error);
+                        return null;
+                    }
+                    return result.decrypted;
+                } catch (error) {
+                    console.warn('Server decryption error:', error);
+                    return null;
+                }
+            };
+
+            // Helper: Fallback to client-side decryption for V1 encrypted data
+            const decryptClientSide = async (encryptedData: string): Promise<string | null> => {
+                try {
+                    const { decryptData } = await import("@/lib/simpleEncrypt");
+                    return decryptData(encryptedData) || null;
+                } catch {
+                    return null;
+                }
+            };
+
             try {
-                // Import simple client-side decryption
-                const { decryptData } = await import("@/lib/simpleEncrypt");
+                // Check encryption version
+                const isV2 = profile.encryptionVersion === 2;
 
                 // Decrypt PAN
                 if (hasEncryptedPAN) {
-                    const decrypted = decryptData(profile.panEncrypted!);
+                    let decrypted: string | null = null;
+                    
+                    if (isV2) {
+                        // V2: Server-side AES-256-GCM decryption
+                        decrypted = await decryptOnServer(profile.panEncrypted!);
+                    } else {
+                        // V1: Client-side XOR fallback (legacy)
+                        decrypted = await decryptClientSide(profile.panEncrypted!);
+                    }
+                    
                     if (decrypted) {
                         setDecryptedPAN(decrypted);
                     } else {
-                        setDecryptError('Failed to decrypt PAN');
+                        setDecryptError('Unauthorized or decryption failed for PAN');
                     }
                 }
 
                 // Decrypt Aadhaar
                 if (hasEncryptedAadhaar) {
-                    const decrypted = decryptData(profile.aadhaarEncrypted!);
+                    let decrypted: string | null = null;
+                    
+                    if (isV2) {
+                        // V2: Server-side AES-256-GCM decryption
+                        decrypted = await decryptOnServer(profile.aadhaarEncrypted!);
+                    } else {
+                        // V1: Client-side XOR fallback (legacy)
+                        decrypted = await decryptClientSide(profile.aadhaarEncrypted!);
+                    }
+                    
                     if (decrypted) {
                         setDecryptedAadhaar(decrypted);
-                    } else {
-                        setDecryptError('Failed to decrypt Aadhaar');
+                    } else if (!decryptError) {
+                        setDecryptError('Unauthorized or decryption failed for Aadhaar');
                     }
                 }
             } catch (e: any) {
@@ -124,7 +176,7 @@ export function UserInfoModal({ isOpen, onClose, userAddress, isStaffView = fals
         };
 
         decryptFields();
-    }, [profile, isStaffView]);
+    }, [profile, isStaffView, connectedAddress, decryptError]);
 
     // Reset profile when modal closes
     useEffect(() => {

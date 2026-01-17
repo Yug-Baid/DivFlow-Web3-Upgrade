@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { WalletConnect } from '@/components/WalletConnect';
 import { LAND_REGISTRY_ADDRESS, LAND_REGISTRY_ABI } from "@/lib/contracts";
+import { useGlobalChatUnread } from "@/hooks/useGlobalChatUnread";
 
 // Known admin address (Anvil deployer account 0)
 const ADMIN_ADDRESS = "0xA3547d22cBc90a88e89125eE360887Ee7C30a9d5";
@@ -63,16 +64,27 @@ const staffNavItems = {
   ],
 };
 
+
 export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const { address } = useAccount();
+  
+  // Global chat unread notification tracking
+  const { hasUnread: hasChatUnread, clearUnread: clearChatUnread } = useGlobalChatUnread();
 
   // Fix hydration mismatch by only rendering role-based nav after mount
   useEffect(() => {
     setIsMounted(true);
   }, []);
+  
+  // Clear chat unread when navigating to chat page
+  useEffect(() => {
+    if (pathname === '/chat') {
+      clearChatUnread();
+    }
+  }, [pathname, clearChatUnread]);
 
   // Role detection for sidebar navigation filtering
   const { data: inspectorLocation } = useReadContract({
@@ -177,13 +189,16 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navItems.map((item) => {
               const isActive = pathname === item.href;
+              const isGlobalChat = item.href === '/chat';
+              const showNotification = isGlobalChat && hasChatUnread && !isActive;
+              
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setIsSidebarOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 relative",
                     isActive
                       ? "bg-primary/10 text-primary border border-primary/20"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -191,6 +206,11 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 >
                   <item.icon className="w-5 h-5" />
                   {item.label}
+                  
+                  {/* Red notification dot for Global Chat */}
+                  {showNotification && (
+                    <span className="absolute right-3 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
+                  )}
                 </Link>
               );
             })}

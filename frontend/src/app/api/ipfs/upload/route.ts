@@ -30,20 +30,20 @@ export async function POST(request: NextRequest) {
         pinataFormData.append("file", file);
         pinataFormData.append("network", "public");
 
-        // Add metadata
-        const metadata = JSON.stringify({
-            name: file.name,
-            keyvalues: {
-                uploadedAt: new Date().toISOString(),
-                type: "land-deed-document",
-                project: "DivFlow"
-            }
+        // Add metadata - Pinata V3 requires separate name and keyvalues fields
+        // All keyvalues must be strings
+        pinataFormData.append("name", file.name || "divflow-upload");
+        
+        const keyvalues = JSON.stringify({
+            uploadedAt: new Date().toISOString(),
+            type: "divflow-document",
+            project: "DivFlow"
         });
-        pinataFormData.append("keyvalues", metadata);
+        pinataFormData.append("keyvalues", keyvalues);
 
         // Add to group if configured
         if (PINATA_GROUP_ID) {
-            pinataFormData.append("group", PINATA_GROUP_ID);
+            pinataFormData.append("group_id", PINATA_GROUP_ID);
         }
 
         // Upload to Pinata using V3 API
