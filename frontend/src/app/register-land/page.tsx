@@ -26,7 +26,7 @@ const ADMIN_ADDRESS = "0xA3547d22cBc90a88e89125eE360887Ee7C30a9d5";
 
 export default function RegisterLand() {
   const router = useRouter();
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
   const { writeContract, data: hash, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
     hash,
@@ -384,6 +384,24 @@ export default function RegisterLand() {
   };
 
   if (!isMounted) return null;
+
+  // BUG-10 FIX: Check if wallet is connected
+  if (!isConnected) {
+    return (
+      <DashboardLayout>
+        <GlassCard className="p-8 max-w-md mx-auto text-center">
+          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Wallet Not Connected</h2>
+          <p className="text-muted-foreground mb-4">
+            Please connect your wallet to register a new property.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Click the &quot;Connect Wallet&quot; button in the navigation bar.
+          </p>
+        </GlassCard>
+      </DashboardLayout>
+    );
+  }
 
   // STAFF ACCESS DENIED
   if (isStaff) {

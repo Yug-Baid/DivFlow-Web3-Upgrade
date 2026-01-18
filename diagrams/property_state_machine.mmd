@@ -1,0 +1,17 @@
+stateDiagram-v2
+    [*] --> Created: User Registers Property
+
+    Created --> Verified: Inspector Approves
+    Created --> Rejected: Inspector Rejects
+
+    Rejected --> [*]: Property Removed
+
+    Verified --> SalePending: Owner Lists for Sale
+    
+    SalePending --> OnSale: Revenue Employee Approves
+    SalePending --> Verified: Revenue Rejects OR Owner Cancels
+
+    OnSale --> Verified: Owner Cancels Sale
+    OnSale --> Bought: Buyer Completes Payment
+
+    Bought --> SalePending: New Owner Lists for Sale
