@@ -25,15 +25,22 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Read file data ONCE for reuse (important for multi-provider backup)
+        const fileArrayBuffer = await file.arrayBuffer();
+        const fileBuffer = Buffer.from(fileArrayBuffer);
+        const fileName = file.name || "divflow-upload";
+        const fileType = file.type || "application/octet-stream";
+
         // Create new form data for Pinata
         const pinataFormData = new FormData();
-        pinataFormData.append("file", file);
+        // Create a new Blob from the buffer to avoid stream consumption issues
+        const pinataBlob = new Blob([fileBuffer], { type: fileType });
+        pinataFormData.append("file", pinataBlob, fileName);
         pinataFormData.append("network", "public");
 
         // Add metadata - Pinata V3 requires separate name and keyvalues fields
-        // All keyvalues must be strings
-        pinataFormData.append("name", file.name || "divflow-upload");
-        
+        pinataFormData.append("name", fileName);
+
         const keyvalues = JSON.stringify({
             uploadedAt: new Date().toISOString(),
             type: "divflow-document",
@@ -65,20 +72,25 @@ export async function POST(request: NextRequest) {
         }
 
         const data = await response.json();
+        const cid = data.data.cid;
+
+        console.log(`✅ Pinata upload complete: CID=${cid}`);
 
         // Return the CID (Content Identifier) for the uploaded file
         return NextResponse.json({
             success: true,
-            cid: data.data.cid,
+            cid: cid,
             id: data.data.id,
-            name: data.data.name
+            name: data.data.name,
+            provider: "pinata"
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("IPFS upload error:", error);
         return NextResponse.json(
-            { success: false, error: error.message || "Upload failed" },
+            { success: false, error: error instanceof Error ? error.message : "Upload failed" },
             { status: 500 }
         );
     }
 }
+

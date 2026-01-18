@@ -96,12 +96,7 @@ export default function TrackRequests() {
 
     const isLoading = isCheckingRegistration || isLoadingProperties || isLoadingInspectors || isLoadingEmployees;
 
-    // Redirect disconnected users
-    useEffect(() => {
-        if (isMounted && !isConnected) {
-            router.push('/');
-        }
-    }, [isConnected, router, isMounted]);
+    // BUG-10 FIX: Wallet connection check is now handled after loading
 
     // Show loading checks
     if (!isMounted || isLoading) {
@@ -114,7 +109,23 @@ export default function TrackRequests() {
         );
     }
 
-    if (!isConnected) return null; // Prevent flash before redirect
+    // BUG-10 FIX: Check if wallet is connected - show message instead of redirect
+    if (!isConnected) {
+        return (
+            <DashboardLayout>
+                <GlassCard className="p-8 max-w-md mx-auto text-center">
+                    <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                    <h2 className="text-xl font-bold mb-2">Wallet Not Connected</h2>
+                    <p className="text-muted-foreground mb-4">
+                        Please connect your wallet to track your property requests.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                        Click the &quot;Connect Wallet&quot; button in the navigation bar.
+                    </p>
+                </GlassCard>
+            </DashboardLayout>
+        );
+    }
 
     // Helper to format address for display
     const formatAddress = (addr: string) => {

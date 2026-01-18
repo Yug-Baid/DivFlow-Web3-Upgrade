@@ -213,6 +213,7 @@ export async function resolveIPFS(cid: string): Promise<{ isMetadata: boolean, d
 export function getIPFSGateways(cid: string): string[] {
     return [
         `https://gateway.pinata.cloud/ipfs/${cid}`,
+        `https://ipfs.filebase.io/ipfs/${cid}`, // Filebase gateway
         `https://ipfs.io/ipfs/${cid}`,
         `https://cloudflare-ipfs.com/ipfs/${cid}`,
         `https://dweb.link/ipfs/${cid}`,

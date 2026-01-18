@@ -8,10 +8,17 @@ import { ChatWindow, ChatMessage } from "@/components/shared/ChatWindow";
 import { sendMessage as firebaseSendMessage, subscribeToMessages, sendMessageRequest, subscribeToMessageRequests, clearMessageRequestsFrom } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, MessageSquare, Hash, Zap, UserPlus } from "lucide-react";
+import { Plus, MessageSquare, Hash, Zap, UserPlus, AlertTriangle } from "lucide-react";
 
 export default function GlobalChatPage() {
-    const { address } = useAccount();
+    const { address, isConnected } = useAccount();
+
+    // Mounted state
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     // UI State
     const [activeContact, setActiveContact] = useState<string | null>(null);
@@ -23,7 +30,7 @@ export default function GlobalChatPage() {
     const [status, setStatus] = useState<'connecting' | 'synced' | 'error'>('connecting');
     const [unread, setUnread] = useState<string[]>([]);
     const [pendingRequests, setPendingRequests] = useState<string[]>([]);
-    
+
     // Track last seen message count per contact to detect new messages
     const lastSeenCountRef = useRef<Record<string, number>>({});
 
@@ -77,11 +84,11 @@ export default function GlobalChatPage() {
 
         contacts.forEach(contact => {
             const dmId = getDmId(address, contact);
-            
+
             const unsubscribe = subscribeToMessages(dmId, (newMessages) => {
                 const currentCount = newMessages.length;
                 const lastSeen = lastSeenCountRef.current[contact] || 0;
-                
+
                 // Check if there are new messages from this contact (not currently active)
                 if (currentCount > lastSeen && contact !== activeContact) {
                     // Check if the latest message is not from current user
@@ -96,7 +103,7 @@ export default function GlobalChatPage() {
                     }
                 }
             });
-            
+
             unsubscribers.push(unsubscribe);
         });
 
@@ -125,7 +132,7 @@ export default function GlobalChatPage() {
             }));
             setMessages(mapped);
             setStatus('synced');
-            
+
             // Update last seen count for active contact
             lastSeenCountRef.current[activeContact] = newMessages.length;
             if (address) {
@@ -171,7 +178,7 @@ export default function GlobalChatPage() {
         if (!text.trim() || !address || !activeContact) return;
 
         const dmId = getDmId(address, activeContact);
-        
+
         try {
             await firebaseSendMessage(dmId, address, text);
             // Send a message request so recipient can discover this conversation
@@ -185,16 +192,16 @@ export default function GlobalChatPage() {
     // Accept a message request and add to contacts
     const acceptRequest = useCallback(async (from: string) => {
         if (!address) return;
-        
+
         if (!contacts.includes(from)) {
             const updated = [...contacts, from];
             setContacts(updated);
             localStorage.setItem(`divflow-contacts-${address.toLowerCase()}`, JSON.stringify(updated));
         }
-        
+
         // Remove from pending UI
         setPendingRequests(prev => prev.filter(r => r.toLowerCase() !== from.toLowerCase()));
-        
+
         // Remove from Firebase to prevent reappearance
         try {
             await clearMessageRequestsFrom(address, from);
@@ -204,6 +211,24 @@ export default function GlobalChatPage() {
 
         setActiveContact(from);
     }, [address, contacts]);
+
+    // BUG-10 FIX: Check if wallet is connected
+    if (!isConnected && isMounted) {
+        return (
+            <DashboardLayout>
+                <GlassCard className="p-8 max-w-md mx-auto text-center">
+                    <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                    <h2 className="text-xl font-bold mb-2">Wallet Not Connected</h2>
+                    <p className="text-muted-foreground mb-4">
+                        Please connect your wallet to access Global Chat.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                        Click the &quot;Connect Wallet&quot; button in the navigation bar.
+                    </p>
+                </GlassCard>
+            </DashboardLayout>
+        );
+    }
 
     return (
         <DashboardLayout>
@@ -267,7 +292,7 @@ export default function GlobalChatPage() {
                     <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
                         {contacts.length === 0 && pendingRequests.length === 0 && (
                             <p className="text-xs text-muted-foreground text-center py-4">
-                                No contacts yet.<br/>Add an address to start chatting.
+                                No contacts yet.<br />Add an address to start chatting.
                             </p>
                         )}
 

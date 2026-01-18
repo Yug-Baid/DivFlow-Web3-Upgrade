@@ -95,6 +95,15 @@ export default function Dashboard() {
     }
   }, [isRegistered, isCheckingRegistration, address, router, isStaff]);
 
+  // AUTO-REDIRECT STAFF: Redirect staff to their specific portal
+  useEffect(() => {
+    if (isMounted && isStaff && address) {
+      const targetPortal = isAdmin ? '/admin' : isLandInspector ? '/inspector' : '/revenue';
+      console.log('🔄 Staff detected, redirecting to', targetPortal);
+      router.push(targetPortal);
+    }
+  }, [isMounted, isStaff, isAdmin, isLandInspector, address, router]);
+
   const result = useReadContract({
     address: LAND_REGISTRY_ADDRESS,
     abi: LAND_REGISTRY_ABI,
@@ -201,7 +210,7 @@ export default function Dashboard() {
     );
   }
 
-  // STAFF ACCESS DENIED: Block staff from citizen dashboard
+  // STAFF ACCESS: Show message briefly while redirecting staff to their portal
   if (isStaff && isMounted) {
     return (
       <DashboardLayout>
@@ -213,14 +222,8 @@ export default function Dashboard() {
           </p>
           <p className="text-sm text-muted-foreground mb-4">
             As a {isAdmin ? "Admin" : isLandInspector ? "Land Inspector" : "Revenue Employee"},
-            please use your role-specific portal from the sidebar.
+            redirecting you to your portal...
           </p>
-          <Button
-            onClick={() => router.push(isAdmin ? '/admin' : isLandInspector ? '/inspector' : '/revenue')}
-            variant="hero"
-          >
-            Go to My Portal
-          </Button>
         </GlassCard>
       </DashboardLayout>
     );

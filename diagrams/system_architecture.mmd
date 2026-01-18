@@ -1,0 +1,114 @@
+flowchart TB
+    subgraph Client[Client Layer]
+        Browser[Web Browser]
+        MetaMask[MetaMask Wallet]
+    end
+
+    subgraph Frontend[Frontend Next.js 14]
+        NextJS[Next.js 14 App Router]
+        TypeScript[TypeScript]
+        TailwindCSS[TailwindCSS]
+        
+        subgraph Pages[Pages]
+            Landing[Landing Page]
+            Register[User Registration]
+            RegisterLand[Property Registration]
+            Dashboard[Dashboard]
+            Marketplace[Marketplace]
+            PropertyDetails[Property Details]
+            InspectorPage[Inspector Portal]
+            RevenuePage[Revenue Portal]
+            AdminPage[Admin Portal]
+            ChatPage[P2P Chat]
+        end
+        
+        subgraph Components[Components]
+            Navbar[Navbar]
+            WalletConnect[WalletConnect]
+            PropertyMap[PropertyMap Leaflet]
+            Modals[Modals]
+            UserInfoModal[UserInfoModal]
+            GlassCard[GlassCard UI]
+        end
+    end
+
+    subgraph Web3Layer[Web3 Integration]
+        Wagmi[wagmi React Hooks]
+        Viem[viem EVM Client]
+        TanstackQuery[react-query State]
+    end
+
+    subgraph Blockchain[Blockchain Layer]
+        subgraph SmartContracts[Smart Contracts Solidity]
+            Users[Users.sol]
+            LandRegistry[LandRegistry.sol]
+            Properties[Properties.sol]
+            TransferOwnership[TransferOfOwnership.sol]
+        end
+        
+        Anvil[Anvil Local Chain]
+        Foundry[Foundry Build Test]
+    end
+
+    subgraph Storage[Decentralized Storage]
+        subgraph IPFSLayer[IPFS Layer]
+            Helia[Helia IPFS]
+            UnixFS[helia unixfs]
+        end
+        
+        subgraph P2PNetwork[P2P Network]
+            libp2p[libp2p Networking]
+            GossipSub[GossipSub PubSub]
+            WebRTC[WebRTC Browser P2P]
+        end
+        
+        OrbitDB[OrbitDB]
+    end
+
+    subgraph Backend[Backend Services]
+        NextAPI[Next.js API Routes]
+        IPFSUpload[IPFS Upload API]
+        EncryptionAPI[Encryption API]
+    end
+
+    subgraph Security[Security Layer]
+        CryptoBrowserify[crypto-browserify]
+        WebCrypto[Web Crypto API]
+        IdentityHash[keccak256 Hashing]
+    end
+
+    Browser --> NextJS
+    MetaMask --> Wagmi
+    
+    NextJS --> TypeScript
+    NextJS --> TailwindCSS
+    NextJS --> Pages
+    Pages --> Components
+    
+    Components --> Wagmi
+    Wagmi --> Viem
+    Wagmi --> TanstackQuery
+    
+    Viem --> Anvil
+    Anvil --> SmartContracts
+    
+    LandRegistry --> Properties
+    LandRegistry --> TransferOwnership
+    TransferOwnership --> Properties
+    
+    Pages --> NextAPI
+    NextAPI --> IPFSUpload
+    NextAPI --> EncryptionAPI
+    IPFSUpload --> Helia
+    
+    Helia --> libp2p
+    libp2p --> GossipSub
+    libp2p --> WebRTC
+    
+    ChatPage --> libp2p
+    
+    EncryptionAPI --> CryptoBrowserify
+    CryptoBrowserify --> WebCrypto
+    Users --> IdentityHash
+    
+    Foundry --> SmartContracts

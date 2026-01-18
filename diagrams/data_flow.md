@@ -1,0 +1,36 @@
+# Data Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Frontend as Frontend
+    participant IPFS as IPFS
+    participant Contract as Smart Contract
+    participant Blockchain as Blockchain
+
+    Note over User,Blockchain: Property Registration Flow
+    
+    User->>Frontend: 1. Fill property details
+    Frontend->>IPFS: 2. Upload documents
+    IPFS-->>Frontend: 3. Return CID
+    Frontend->>Contract: 4. addLand location survey CID
+    Contract->>Blockchain: 5. Store property state Created
+    Blockchain-->>Frontend: 6. Emit LandAdded event
+    
+    Note over User,Blockchain: Inspector Verification Flow
+    
+    Frontend->>IPFS: 7. Fetch property documents
+    User->>Contract: 8. verifyPropertyByInspector
+    Contract->>Blockchain: 9. Update state to Verified
+    
+    Note over User,Blockchain: Marketplace Sale Flow
+    
+    User->>Contract: 10. addPropertyOnSale price
+    Contract->>Blockchain: 11. State to SalePending
+    User->>Contract: 12. approveSaleRequest
+    Contract->>Blockchain: 13. State to OnSale
+    User->>Contract: 14. sendPurchaseRequest offer
+    User->>Contract: 15. acceptBuyerRequest
+    User->>Contract: 16. transferOwnership plus ETH
+    Contract->>Blockchain: 17. Transfer ownership plus funds
+```

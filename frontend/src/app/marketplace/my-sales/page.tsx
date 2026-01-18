@@ -60,14 +60,12 @@ export default function MySales() {
     const isStaff = isAdmin || isLandInspector || isRevenueEmployee;
 
     // ISSUE-2: Redirect unregistered non-staff users
-    // ISSUE-2: Redirect unregistered non-staff users or disconnected users
+    // ISSUE-2: Redirect unregistered non-staff users
     useEffect(() => {
-        if (mounted && !isConnected) {
-            router.push('/');
-        } else if (!isCheckingRegistration && isRegistered === false && address && !isStaff) {
+        if (!isCheckingRegistration && isRegistered === false && address && !isStaff) {
             router.push('/register');
         }
-    }, [isRegistered, isCheckingRegistration, address, router, isStaff, isConnected, mounted]);
+    }, [isRegistered, isCheckingRegistration, address, router, isStaff]);
 
     // IMPORTANT: ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const { data: allSales, isLoading, refetch: refetchAllSales } = useReadContract({
@@ -133,9 +131,25 @@ export default function MySales() {
     });
 
     // EARLY RETURNS MUST COME AFTER ALL HOOKS
-    // Strict guard to prevent flashing
-    if (!isConnected && mounted) return null;
     if (!mounted) return null;
+
+    // BUG-10 FIX: Check if wallet is connected - show message instead of redirect
+    if (!isConnected) {
+        return (
+            <DashboardLayout>
+                <GlassCard className="p-8 max-w-md mx-auto text-center">
+                    <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                    <h2 className="text-xl font-bold mb-2">Wallet Not Connected</h2>
+                    <p className="text-muted-foreground mb-4">
+                        Please connect your wallet to view and manage your sales.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                        Click the &quot;Connect Wallet&quot; button in the navigation bar.
+                    </p>
+                </GlassCard>
+            </DashboardLayout>
+        );
+    }
 
     // ISSUE-2: Show loading while checking registration
     if (isCheckingRegistration) {

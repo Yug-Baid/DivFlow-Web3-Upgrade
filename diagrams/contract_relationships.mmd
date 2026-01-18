@@ -1,0 +1,54 @@
+classDiagram
+    class Users {
+        +mapping registeredUsers
+        +mapping users
+        +mapping aadharHashes
+        +mapping panHashes
+        +registerUser()
+        +isUserRegistered()
+        +getUserProfileCID()
+        +verifyIdentity()
+    }
+
+    class LandRegistry {
+        +Property propertiesContract
+        +mapping propertiesOfOwner
+        +mapping landInspectorByLocation
+        +mapping revenueDeptIdToEmployee
+        +addLand()
+        +verifyPropertyByInspector()
+        +rejectPropertyByInspector()
+        +approveSaleRequest()
+        +rejectSaleRequest()
+        +transferOwnership()
+    }
+
+    class Property {
+        +enum StateOfProperty
+        +enum LandType
+        +struct Land
+        +mapping lands
+        +addLand()
+        +changeStateToVerified()
+        +changeStateToRejected()
+        +changeStateToSalePending()
+        +changeStateFromSalePendingToOnSale()
+        +updateOwner()
+    }
+
+    class TransferOfOwnership {
+        +enum SaleState
+        +enum RequestedUserToASaleState
+        +struct Sales
+        +struct RequestedUser
+        +addPropertyOnSale()
+        +sendPurchaseRequest()
+        +acceptBuyerRequest()
+        +rejectBuyerRequest()
+        +transferOwnership()
+    }
+
+    LandRegistry --> Property : creates and manages
+    TransferOfOwnership --> Property : updates state
+    TransferOfOwnership --> LandRegistry : triggers transfer
+    LandRegistry --> TransferOfOwnership : authorizes

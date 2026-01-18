@@ -85,15 +85,11 @@ export default function RequestedSales() {
 
     // Redirect unregistered non-staff users
     useEffect(() => {
-        if (mounted && !isConnected) {
-            router.push('/');
-        } else if (!isCheckingRegistration && isRegistered === false && address && !isStaff) {
+        if (!isCheckingRegistration && isRegistered === false && address && !isStaff) {
             router.push('/register');
         }
-    }, [isRegistered, isCheckingRegistration, address, router, isStaff, isConnected, mounted]);
+    }, [isRegistered, isCheckingRegistration, address, router, isStaff]);
 
-    // Strict guard to prevent flashing
-    if (!isConnected && mounted) return null;
 
     const { data: sales, isLoading: isLoadingSales, refetch } = useReadContract({
         address: TRANSFER_OWNERSHIP_ADDRESS,
@@ -285,6 +281,24 @@ export default function RequestedSales() {
 
         return { text: "Pending", color: "bg-yellow-500/20 text-yellow-400", icon: Clock, borderColor: "border-yellow-500/30" };
     };
+
+    // BUG-10 FIX: Check if wallet is connected - show message instead of redirect/crash
+    if (!isConnected && mounted) {
+        return (
+            <DashboardLayout>
+                <GlassCard className="p-8 max-w-md mx-auto text-center">
+                    <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                    <h2 className="text-xl font-bold mb-2">Wallet Not Connected</h2>
+                    <p className="text-muted-foreground mb-4">
+                        Please connect your wallet to view your purchase requests.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                        Click the &quot;Connect Wallet&quot; button in the navigation bar.
+                    </p>
+                </GlassCard>
+            </DashboardLayout>
+        );
+    }
 
     // Show loading while checking registration
     if (isCheckingRegistration && !mounted) {

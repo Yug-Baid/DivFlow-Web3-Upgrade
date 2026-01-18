@@ -1,0 +1,87 @@
+flowchart LR
+    %% ADMIN SECTION
+    Admin((Admin))
+    subgraph AdminUC[Admin Functions]
+        UC_AssignInspector([Assign Inspector])
+        UC_AssignRevenue([Assign Revenue Employee])
+    end
+    Admin --> AdminUC
+
+    %% INSPECTOR SECTION  
+    Inspector((Inspector))
+    subgraph InspectorUC[Inspector Functions]
+        UC_VerifyProperty([Verify Property])
+        UC_RejectProperty([Reject Property])
+        UC_ViewProfileI([View User Profile])
+    end
+    Inspector --> InspectorUC
+
+    %% REVENUE SECTION
+    Revenue((Revenue))
+    subgraph RevenueUC[Revenue Functions]
+        UC_ApproveSale([Approve Sale])
+        UC_RejectSale([Reject Sale])
+        UC_ViewProfileR([View User Profile])
+    end
+    Revenue --> RevenueUC
+
+    %% CITIZEN SECTION
+    Citizen((Citizen))
+    subgraph CitizenUC[Property Owner Functions]
+        UC_Register1([Register Account])
+        UC_RegisterProperty([Register Property])
+        UC_UploadDocs([Upload Documents])
+        UC_TrackStatus([Track Status])
+        UC_RequestSale([Request Sale])
+        UC_AcceptOffer([Accept Offer])
+    end
+    Citizen --> CitizenUC
+
+    %% BUYER SECTION
+    Buyer((Buyer))
+    subgraph BuyerUC[Buyer Functions]
+        UC_Register2([Register Account])
+        UC_BrowseMarket([Browse Marketplace])
+        UC_MakeOffer([Make Offer])
+        UC_Payment([Complete Payment])
+        UC_ViewHistory([View History])
+    end
+    Buyer --> BuyerUC
+
+    %% SHARED SYSTEM showing workflow connections
+    subgraph Workflow[Property Lifecycle Flow]
+        direction TB
+        W1[Property Created]
+        W2[Inspector Review]
+        W3[Property Verified]
+        W4[Sale Requested]
+        W5[Revenue Review]
+        W6[Listed on Market]
+        W7[Offer Made]
+        W8[Ownership Transferred]
+        
+        W1 --> W2
+        W2 --> W3
+        W3 --> W4
+        W4 --> W5
+        W5 --> W6
+        W6 --> W7
+        W7 --> W8
+    end
+
+    %% Connect use cases to workflow
+    UC_RegisterProperty -.-> W1
+    UC_VerifyProperty -.-> W2
+    UC_RequestSale -.-> W4
+    UC_ApproveSale -.-> W5
+    UC_BrowseMarket -.-> W6
+    UC_MakeOffer -.-> W7
+    UC_Payment -.-> W8
+
+    %% Styling
+    style Admin fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Inspector fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Revenue fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style Citizen fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style Buyer fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style Workflow fill:#fffde7,stroke:#fbc02d,stroke-width:2px
