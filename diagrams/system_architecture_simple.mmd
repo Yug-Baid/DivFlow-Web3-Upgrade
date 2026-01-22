@@ -1,0 +1,77 @@
+flowchart TB
+    subgraph Client["🖥️ Client Layer"]
+        Browser["🌐 Web Browser"]
+        Wallet["🦊 MetaMask Wallet"]
+    end
+
+    subgraph Frontend["⚛️ Frontend - Next.js 14"]
+        direction TB
+        subgraph Pages["📱 Application Pages"]
+            Register["📝 User Registration"]
+            Dashboard["📊 Dashboard"]
+            Marketplace["🏪 Marketplace"]
+            Portals["👮 Inspector & Revenue Portals"]
+            ChatPage["💬 Real-time Chat"]
+            PriceChecker["💰 ETH Price Checker"]
+        end
+        subgraph Tech["🛠️ Tech Stack"]
+            TS["📘 TypeScript"]
+            Tailwind["🎨 TailwindCSS"]
+            Leaflet["🗺️ Leaflet Maps"]
+            wagmiLib["🔌 wagmi + viem"]
+        end
+    end
+
+    subgraph Web3["⛓️ Web3 Integration Layer"]
+        wagmi["🪝 wagmi React Hooks"]
+        viem["📡 viem EVM Client"]
+        query["⚡ TanStack Query"]
+    end
+
+    subgraph Blockchain["🔗 Blockchain Layer"]
+        subgraph Contracts["📜 Smart Contracts - Solidity"]
+            Users["👤 Users.sol"]
+            Land["🏛️ LandRegistry.sol"]
+            Props["🏠 Properties.sol"]
+            Transfer["🔄 TransferOwnership.sol"]
+        end
+        Chain["⛓️ Anvil / Ethereum"]
+        Foundry["🔨 Foundry Build & Test"]
+    end
+
+    subgraph Storage["☁️ Cloud & Decentralized Storage"]
+        subgraph IPFS["📦 IPFS Storage"]
+            Helia["🌀 Helia IPFS"]
+            Pinata["📌 Pinata Gateway"]
+            Docs["📄 Documents & Deeds"]
+        end
+        subgraph Firebase["🔥 Firebase Services"]
+            Firestore["💾 Firestore Database"]
+            RealtimeDB["⚡ Realtime Chat"]
+            Auth["🔐 Authentication"]
+        end
+    end
+
+    subgraph Security["🛡️ Security & Cryptography"]
+        AES["🔒 AES-256-GCM"]
+        Keccak["#️⃣ keccak256 Hash"]
+        Verhoeff["✅ Verhoeff Algorithm"]
+        OTP["📱 Mobile OTP"]
+    end
+
+    subgraph APIs["🌐 External APIs"]
+        CoinGecko["📈 CoinGecko Price API"]
+        Geocoding["📍 Geocoding API"]
+        Gemini["🤖 Gemini AI API"]
+    end
+
+    Browser --> Frontend
+    Wallet --> wagmi
+    Frontend --> Web3
+    Web3 --> Blockchain
+    Frontend --> IPFS
+    ChatPage --> Firebase
+    Frontend --> Security
+    Users --> Keccak
+    Frontend --> APIs
+    PriceChecker --> CoinGecko

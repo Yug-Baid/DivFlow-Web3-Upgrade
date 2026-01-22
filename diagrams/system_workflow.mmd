@@ -1,0 +1,90 @@
+stateDiagram-v2
+    [*] --> LandingPage: User Visits Website
+
+    LandingPage --> ConnectWallet: Click Get Started
+    
+    ConnectWallet --> WalletConnected: MetaMask Connected
+    ConnectWallet --> LandingPage: Connection Failed
+
+    WalletConnected --> CheckRole: Detect User Role
+
+    state CheckRole {
+        [*] --> RoleDetection
+        RoleDetection --> IsAdmin: Admin Wallet
+        RoleDetection --> IsInspector: Inspector Wallet
+        RoleDetection --> IsRevenue: Revenue Wallet
+        RoleDetection --> IsCitizen: Regular User
+    }
+
+    IsAdmin --> AdminPortal: Go to Admin Dashboard
+    IsInspector --> InspectorPortal: Go to Inspector Portal
+    IsRevenue --> RevenuePortal: Go to Revenue Portal
+    IsCitizen --> CheckRegistration: Check User Registration
+
+    CheckRegistration --> UserRegistration: Not Registered
+    CheckRegistration --> Dashboard: Already Registered
+
+    UserRegistration --> Dashboard: Registration Complete
+
+    state Dashboard {
+        [*] --> ViewProperties
+        ViewProperties --> RegisterLand: Add New Property
+        ViewProperties --> TrackStatus: Check Property Status
+        ViewProperties --> GoToMarketplace: Browse Listings
+        ViewProperties --> OpenChat: Message Users
+    }
+
+    RegisterLand --> PropertyCreated: Submit Property
+    PropertyCreated --> AwaitingInspection: Assigned to Inspector
+
+    state InspectorPortal {
+        [*] --> ReviewQueue
+        ReviewQueue --> InspectProperty: Select Property
+        InspectProperty --> ApproveProperty: Verify Documents
+        InspectProperty --> RejectProperty: Invalid Documents
+    }
+
+    ApproveProperty --> PropertyVerified: Mark as Verified
+    RejectProperty --> PropertyCreated: Can Re-register
+
+    PropertyVerified --> ListForSale: Owner Lists Property
+    ListForSale --> AwaitingRevenue: Sale Request Sent
+
+    state RevenuePortal {
+        [*] --> SaleQueue
+        SaleQueue --> ReviewSale: Select Sale Request
+        ReviewSale --> ApproveSale: Approve Listing
+        ReviewSale --> RejectSale: Reject Listing
+    }
+
+    ApproveSale --> OnMarketplace: Listed on Marketplace
+    RejectSale --> PropertyVerified: Back to Verified
+
+    state Marketplace {
+        [*] --> BrowseListings
+        BrowseListings --> ViewProperty: Select Property
+        ViewProperty --> MakeOffer: Send Purchase Request
+        ViewProperty --> ChatWithOwner: Open Chat
+    }
+
+    GoToMarketplace --> Marketplace
+    OnMarketplace --> Marketplace
+
+    MakeOffer --> OfferPending: Awaiting Owner Response
+    OfferPending --> OfferAccepted: Owner Accepts
+    OfferPending --> OfferRejected: Owner Rejects
+
+    OfferAccepted --> PayETH: Buyer Sends Payment
+    PayETH --> OwnershipTransferred: Smart Contract Executes
+    OwnershipTransferred --> NewOwner: Property in Buyer Dashboard
+
+    OfferRejected --> Marketplace: Try Another Property
+
+    NewOwner --> Dashboard: Continue Using Platform
+
+    state AdminPortal {
+        [*] --> AdminDashboard
+        AdminDashboard --> AssignInspector: Map Inspector to Location
+        AdminDashboard --> AssignRevenue: Map Employee to Dept
+        AdminDashboard --> ViewStats: System Analytics
+    }

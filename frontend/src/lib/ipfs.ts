@@ -22,6 +22,7 @@ export interface PropertyMetadata {
             lat: number;
             lng: number;
             address?: string; // Property address from geocoding
+            polygon?: [number, number][]; // Polygon boundary coordinates (for area selection)
         };
         owner?: string;
     };

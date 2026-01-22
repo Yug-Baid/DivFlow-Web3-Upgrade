@@ -1,0 +1,30 @@
+stateDiagram-v2
+    [*] --> NotConnected: Open App
+
+    NotConnected --> WalletConnected: Connect MetaMask
+    
+    WalletConnected --> AlreadyRegistered: User Exists
+    WalletConnected --> FormEntry: New User
+
+    AlreadyRegistered --> [*]: Go to Dashboard
+
+    FormEntry --> ValidatingInputs: Enter Details
+    
+    ValidatingInputs --> FormEntry: Invalid Aadhaar/PAN/Mobile
+    ValidatingInputs --> DuplicateCheck: All Fields Valid
+
+    DuplicateCheck --> FormEntry: Aadhaar or PAN Already Used
+    DuplicateCheck --> OTPVerification: No Duplicates
+
+    OTPVerification --> OTPFailed: Wrong/Expired OTP
+    OTPFailed --> OTPVerification: Resend OTP
+    OTPVerification --> EncryptAndUpload: OTP Verified
+
+    EncryptAndUpload --> BlockchainTx: IPFS Upload + Hash
+
+    BlockchainTx --> TxFailed: Transaction Failed
+    TxFailed --> BlockchainTx: Retry
+    BlockchainTx --> Registered: Transaction Confirmed
+
+    Registered --> [*]: Go to Dashboard
+
