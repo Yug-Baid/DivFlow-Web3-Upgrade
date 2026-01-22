@@ -254,6 +254,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
                   readonly
                   initialLat={metadata?.properties?.location?.lat}
                   initialLng={metadata?.properties?.location?.lng}
+                  polygon={metadata?.properties?.location?.polygon}
                 />
               </div>
               <div className="mt-4 grid grid-cols-2 gap-4 text-sm">

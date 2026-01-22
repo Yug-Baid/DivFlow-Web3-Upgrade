@@ -291,6 +291,7 @@ export default function PropertyDetailsPage({ params }: { params: { id: string }
                                 readonly
                                 initialLat={metadata?.properties?.location?.lat}
                                 initialLng={metadata?.properties?.location?.lng}
+                                polygon={metadata?.properties?.location?.polygon}
                             />
                         </div>
                         

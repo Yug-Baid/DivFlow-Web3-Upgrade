@@ -21,6 +21,12 @@ const PropertyLocationPicker = dynamic(
   { ssr: false }
 );
 
+// Dynamic import for Area Selector with polygon drawing
+const PropertyAreaSelector = dynamic(
+  () => import("@/components/PropertyAreaSelector").then((mod) => mod.PropertyAreaSelector),
+  { ssr: false }
+);
+
 // Admin address for role detection
 const ADMIN_ADDRESS = "0xA3547d22cBc90a88e89125eE360887Ee7C30a9d5";
 
@@ -42,6 +48,8 @@ export default function RegisterLand() {
     addressLine: "", // NEW: Address from geocoding
     lat: 20.5937, // Default center
     lng: 78.9629,
+    polygonCoords: [] as [number, number][], // NEW: Polygon coordinates from area selector
+    areaAutoFilled: false, // NEW: Track if area was auto-filled from polygon
   });
 
   // Check if user is registered
@@ -106,6 +114,8 @@ export default function RegisterLand() {
         addressLine: "",
         lat: 20.5937, // Default center
         lng: 78.9629,
+        polygonCoords: [],
+        areaAutoFilled: false,
       });
       setFiles({
         coverPhoto: null,
@@ -195,7 +205,7 @@ export default function RegisterLand() {
     }
   };
 
-  // NEW: Handle location select from PropertyLocationPicker
+  // Handle location select from PropertyLocationPicker
   const handleLocationSelect = (data: { lat: number; lng: number; address: string; formatted?: string }) => {
     const { lat, lng, address, formatted } = data;
 
@@ -214,6 +224,32 @@ export default function RegisterLand() {
       addressLine: address || formatted || '',
       locationId: mockLocationId,
       revenueDeptId: mockRevenueId
+    }));
+  };
+
+  // NEW: Handle area select from PropertyAreaSelector (polygon drawing)
+  const handleAreaSelect = (areaSqFt: number, polygonCoords: [number, number][]) => {
+    setFormData(prev => ({
+      ...prev,
+      area: areaSqFt > 0 ? areaSqFt.toString() : '',
+      polygonCoords,
+      areaAutoFilled: areaSqFt > 0
+    }));
+  };
+
+  // NEW: Handle location from PropertyAreaSelector (includes address from polygon centroid)
+  const handleAreaLocationSelect = (lat: number, lng: number, address?: string) => {
+    // AUTO-ID GENERATION (MOCK LOGIC)
+    const mockLocationId = Math.floor(lat * 1000).toString().slice(0, 6);
+    const mockRevenueId = Math.floor(lng * 10).toString().slice(0, 3);
+
+    setFormData(prev => ({
+      ...prev,
+      lat,
+      lng,
+      locationId: mockLocationId,
+      revenueDeptId: mockRevenueId,
+      addressLine: address || prev.addressLine, // Auto-fill address from polygon centroid
     }));
   };
 
@@ -306,7 +342,8 @@ export default function RegisterLand() {
           location: {
             lat: formData.lat,
             lng: formData.lng,
-            address: formData.addressLine
+            address: formData.addressLine,
+            polygon: formData.polygonCoords.length > 0 ? formData.polygonCoords : undefined // Store polygon boundary
           },
           owner: address
         }
@@ -526,19 +563,32 @@ export default function RegisterLand() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="area">Area (sq. ft)</Label>
+                  <Label htmlFor="area">
+                    Area (sq. ft)
+                    {formData.areaAutoFilled && <span className="text-green-500 text-xs ml-2">✓ Auto-filled from polygon</span>}
+                  </Label>
                   <div className="relative">
                     <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input id="area" name="area" type="number" required className="pl-10 bg-secondary/50 border-input" value={formData.area} onChange={handleChange} placeholder="e.g. 1200" />
+                    <Input 
+                      id="area" 
+                      name="area" 
+                      type="number" 
+                      required 
+                      className={`pl-10 border-input ${formData.areaAutoFilled ? 'bg-green-50 dark:bg-green-900/20' : 'bg-secondary/50'}`}
+                      value={formData.area} 
+                      onChange={handleChange} 
+                      placeholder="Draw on map or enter manually" 
+                    />
                   </div>
+                  <p className="text-xs text-muted-foreground">💡 Draw a polygon on the map below to auto-calculate the area</p>
                 </div>
               </div>
 
-              {/* Section 2: Map Location with Address Autocomplete */}
-              <PropertyLocationPicker
-                onLocationSelect={handleLocationSelect}
+              {/* Section 2: Map with Polygon Area Selection */}
+              <PropertyAreaSelector
+                onAreaSelect={handleAreaSelect}
+                onLocationSelect={handleAreaLocationSelect}
                 initialPosition={[formData.lat, formData.lng]}
-                initialAddress={formData.addressLine}
                 height="450px"
               />
 

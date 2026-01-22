@@ -335,10 +335,11 @@ export default function InspectorDashboard() {
 
                                                 {/* Map Component */}
                                                 {(meta?.properties?.location?.lat && meta?.properties?.location?.lng) && (
-                                                    <div className="h-32 w-full rounded-lg overflow-hidden border border-border/50">
+                                                    <div className="h-48 w-full rounded-lg overflow-hidden border border-border/50">
                                                         <DynamicMap
                                                             pos={[meta.properties.location.lat, meta.properties.location.lng]}
                                                             zoom={15}
+                                                            polygon={meta.properties.location.polygon}
                                                         />
                                                     </div>
                                                 )}

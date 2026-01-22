@@ -4,7 +4,7 @@ stateDiagram-v2
     Created --> Verified: Inspector Approves
     Created --> Rejected: Inspector Rejects
 
-    Rejected --> [*]: Property Removed
+    Rejected --> Created: Re-register Property
 
     Verified --> SalePending: Owner Lists for Sale
     
