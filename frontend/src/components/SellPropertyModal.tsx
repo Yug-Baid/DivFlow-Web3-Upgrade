@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { TRANSFER_OWNERSHIP_ADDRESS, TRANSFER_OWNERSHIP_ABI } from "@/lib/contracts";
 import { parseEther } from "viem";
@@ -21,32 +21,65 @@ export default function SellPropertyModal({ isOpen, onClose, propertyId, onSucce
   const [price, setPrice] = useState("");
   // D2 FIX: Track if form has been submitted to prevent multiple clicks
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  // Track if we've already handled the success to prevent double-processing
+  const [hasHandledSuccess, setHasHandledSuccess] = useState(false);
+
+  // Use refs for callbacks to avoid stale closures and prevent timer cancellation
+  const onCloseRef = useRef(onClose);
+  const onSuccessRef = useRef(onSuccess);
+  const resetWriteRef = useRef(resetWrite);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Keep refs updated
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    onSuccessRef.current = onSuccess;
+    resetWriteRef.current = resetWrite;
+  });
 
   // D1 FIX: Auto-close modal after successful listing
   useEffect(() => {
-    if (isConfirmed) {
-      // G1 FIX: Call onSuccess callback immediately when confirmed
-      if (onSuccess) {
-        onSuccess();
+    if (isConfirmed && !hasHandledSuccess) {
+      setHasHandledSuccess(true);
+
+      // Call onSuccess callback immediately when confirmed
+      if (onSuccessRef.current) {
+        onSuccessRef.current();
       }
-      const timer = setTimeout(() => {
+
+      // Auto-close after showing success message - use ref to not be cancelled
+      timerRef.current = setTimeout(() => {
         setPrice("");
         setHasSubmitted(false);
-        resetWrite();
-        onClose();
+        setHasHandledSuccess(false);
+        resetWriteRef.current();
+        onCloseRef.current();
       }, 2000);
-      return () => clearTimeout(timer);
     }
-  }, [isConfirmed, onClose, resetWrite, onSuccess]);
+  }, [isConfirmed, hasHandledSuccess]); // Only depend on isConfirmed and hasHandledSuccess
+
+  // Cleanup timer on unmount only
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       setPrice("");
       setHasSubmitted(false);
-      resetWrite();
+      setHasHandledSuccess(false);
+      resetWriteRef.current();
     }
-  }, [isOpen, resetWrite]);
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
