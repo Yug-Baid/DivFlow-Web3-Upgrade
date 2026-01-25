@@ -42,6 +42,10 @@ export default function InspectorDashboard() {
     const [historyLogs, setHistoryLogs] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
+    // Track property IDs that have been processed (verified/rejected) for optimistic UI updates
+    const [processedPropertyIds, setProcessedPropertyIds] = useState<Set<string>>(new Set());
+    // Track the property being processed for optimistic removal
+    const [processingPropertyId, setProcessingPropertyId] = useState<bigint | null>(null);
 
     useEffect(() => {
         setIsMounted(true);
@@ -77,25 +81,45 @@ export default function InspectorDashboard() {
     // Write Contract
     const { writeContract, data: hash, error: writeError, reset: resetWrite } = useWriteContract();
     const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
+    // Track the type of action being performed for optimistic history update
+    const [pendingAction, setPendingAction] = useState<'verify' | 'reject' | null>(null);
 
     useEffect(() => {
-        if (isConfirmed) {
-            setTimeout(() => {
-                refetch();
-                resetWrite();
-                setRejectPropertyId(null);
-                setRejectReason("");
-                fetchHistory(); // Refresh history
-            }, 1000);
+        if (isConfirmed && hash) {
+            // Add the processed property to the Set for optimistic UI removal
+            if (processingPropertyId) {
+                setProcessedPropertyIds(prev => new Set(prev).add(processingPropertyId.toString()));
+
+                // Create optimistic history entry
+                const optimisticEntry = {
+                    type: pendingAction === 'verify' ? 'Verified' : 'Rejected',
+                    args: { propertyId: processingPropertyId },
+                    transactionHash: hash,
+                    blockNumber: BigInt(Date.now()), // Temporary high number for sorting
+                    isOptimistic: true // Flag to identify optimistic entries
+                };
+                setHistoryLogs(prev => [optimisticEntry, ...prev]);
+            }
+            // Also refetch to ensure data is eventually consistent
+            refetch();
+            // Delayed history refetch to get actual blockchain data with proper block numbers
+            setTimeout(() => fetchHistory(), 3000);
+            resetWrite();
+            setRejectPropertyId(null);
+            setRejectReason("");
+            setProcessingPropertyId(null);
+            setPendingAction(null);
         }
-    }, [isConfirmed, refetch, resetWrite]);
+    }, [isConfirmed, refetch, resetWrite, processingPropertyId, hash, pendingAction]);
 
     const isAuthorized = address && authorizedInspector && address.toLowerCase() === authorizedInspector.toLowerCase();
 
-    // Filter Pending Properties
+    // Filter Pending Properties - also exclude optimistically processed ones
     const pendingProperties = useMemo(() =>
-        (properties as any[])?.filter((p: any) => p.state === 0) || [],
-        [properties]);
+        (properties as any[])?.filter((p: any) =>
+            p.state === 0 && !processedPropertyIds.has(p.propertyId.toString())
+        ) || [],
+        [properties, processedPropertyIds]);
 
     // Fetch Revenue Employees for each property's department using useReadContracts (batch query)
     const revenueEmployeeQueries = useMemo(() =>
@@ -175,6 +199,8 @@ export default function InspectorDashboard() {
     // Actions
     const handleVerify = async (propertyId: bigint) => {
         if (!address || !isAuthorized) return;
+        setProcessingPropertyId(propertyId); // Track for optimistic removal
+        setPendingAction('verify'); // Track action type for optimistic history
         writeContract({
             address: LAND_REGISTRY_ADDRESS,
             abi: LAND_REGISTRY_ABI,
@@ -185,6 +211,8 @@ export default function InspectorDashboard() {
 
     const handleReject = async (propertyId: bigint) => {
         if (!address || !isAuthorized || !rejectReason.trim()) return;
+        setProcessingPropertyId(propertyId); // Track for optimistic removal
+        setPendingAction('reject'); // Track action type for optimistic history
         writeContract({
             address: LAND_REGISTRY_ADDRESS,
             abi: LAND_REGISTRY_ABI,

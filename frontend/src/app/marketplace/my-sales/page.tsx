@@ -350,6 +350,8 @@ function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, 
     const [isRejecting, setIsRejecting] = useState(false);
     const [hasAccepted, setHasAccepted] = useState(false);
     const [lastAction, setLastAction] = useState<'accept' | 'reject' | null>(null);
+    // Track which specific buyer was accepted for optimistic UI display
+    const [acceptedBuyerInfo, setAcceptedBuyerInfo] = useState<{ buyer: string; price: bigint } | null>(null);
 
     useEffect(() => {
         if (isConfirmed) {
@@ -357,20 +359,16 @@ function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, 
             if (isAccepting && !isRejecting) {
                 setHasAccepted(true);
             }
-            // Always reset processing states and refetch
+            // Always reset processing states
             setIsAccepting(false);
             setIsRejecting(false);
 
-            // FIX: Refetch the requests data to get updated state from blockchain
+            // Immediately refetch to update UI with new blockchain state
             refetch();
             if (onUpdate) onUpdate(); // Refetch parent sales list to update card status
 
-            // FIX: Reset write state after a short delay to allow UI to show confirmation message
-            // then clear the success state so it doesn't persist
-            const timer = setTimeout(() => {
-                resetWrite();
-            }, 2000);
-            return () => clearTimeout(timer);
+            // Reset write state immediately (confirmation message shows via isConfirmed flag)
+            resetWrite();
         }
     }, [isConfirmed, refetch, isAccepting, isRejecting, onUpdate, resetWrite]);
 
@@ -413,6 +411,8 @@ function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, 
 
         setIsAccepting(true);
         setLastAction('accept');
+        // Store accepted buyer info for optimistic UI display
+        setAcceptedBuyerInfo({ buyer, price });
 
         try {
             writeContract({
@@ -425,6 +425,7 @@ function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, 
             console.error(e);
             setIsAccepting(false);
             setLastAction(null);
+            setAcceptedBuyerInfo(null); // Reset on error
         }
     }
 
@@ -497,8 +498,8 @@ function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, 
                 </div>
             </div>
 
-            {/* BUG-3 FIX: Show accepted buyer info when sale is AcceptedToABuyer (state === 1) */}
-            {sale.state === 1 && (
+            {/* BUG-3 FIX: Show accepted buyer info when sale is AcceptedToABuyer (state === 1) OR optimistically when hasAccepted */}
+            {(sale.state === 1 || (hasAccepted && acceptedBuyerInfo)) && (
                 <div className="p-4 bg-green-500/10 border-b border-green-500/20">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
@@ -510,23 +511,31 @@ function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, 
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-1">
                                     <span className="text-muted-foreground">Buyer:</span>
                                     <span className="font-mono text-foreground break-all">
-                                        {sale.acceptedFor}
+                                        {sale.state === 1 ? sale.acceptedFor : acceptedBuyerInfo?.buyer}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <span className="text-muted-foreground">Accepted Price:</span>
                                     <span className="font-mono text-green-400 font-bold text-lg">
-                                        {formatEther(sale.acceptedPrice)} ETH
+                                        {formatEther(sale.state === 1 ? sale.acceptedPrice : acceptedBuyerInfo?.price || BigInt(0))} ETH
                                     </span>
                                 </div>
                             </div>
                         </div>
-                        <div className="text-right">
-                            <p className="text-xs text-muted-foreground mb-1">Payment Deadline</p>
-                            <p className="font-mono text-sm text-yellow-400">
-                                {new Date(Number(sale.deadlineForPayment) * 1000).toLocaleString()}
-                            </p>
-                        </div>
+                        {sale.state === 1 && (
+                            <div className="text-right">
+                                <p className="text-xs text-muted-foreground mb-1">Payment Deadline</p>
+                                <p className="font-mono text-sm text-yellow-400">
+                                    {new Date(Number(sale.deadlineForPayment) * 1000).toLocaleString()}
+                                </p>
+                            </div>
+                        )}
+                        {sale.state !== 1 && hasAccepted && (
+                            <div className="text-right">
+                                <p className="text-xs text-muted-foreground mb-1">Status</p>
+                                <p className="font-mono text-sm text-green-400">Awaiting blockchain sync...</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -637,7 +646,11 @@ function SaleItem({ sale, propertyState, propertyIpfsHash, onUpdate, isHistory, 
                                     )}
                                     {hasAccepted && (
                                         <span className="flex items-center gap-1 text-green-500 text-sm font-bold bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">
-                                            <Check className="w-3 h-3" /> {req.state === 2 ? 'Accepted' : 'Sale Closed'}
+                                            <Check className="w-3 h-3" />
+                                            {/* Show 'Accepted' for the accepted buyer, hide others */}
+                                            {req.state === 2 || (acceptedBuyerInfo && acceptedBuyerInfo.buyer.toLowerCase() === req.user.toLowerCase())
+                                                ? 'Accepted'
+                                                : 'Not Selected'}
                                         </span>
                                     )}
                                 </div>

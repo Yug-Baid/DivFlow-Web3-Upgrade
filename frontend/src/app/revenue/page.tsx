@@ -44,6 +44,10 @@ export default function RevenueDashboard() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [inspectors, setInspectors] = useState<Record<string, string>>({});
   const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
+  // Track property IDs that have been processed (approved/rejected) for optimistic UI updates
+  const [processedPropertyIds, setProcessedPropertyIds] = useState<Set<string>>(new Set());
+  // Track the property being processed for optimistic removal
+  const [processingPropertyId, setProcessingPropertyId] = useState<bigint | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -79,35 +83,51 @@ export default function RevenueDashboard() {
   // Write Contract
   const { writeContract, data: hash, error: writeError, reset: resetWrite } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
+  // Track the type of action being performed for optimistic history update
+  const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | null>(null);
 
   useEffect(() => {
-    if (isConfirmed) {
-      setTimeout(() => {
-        refetch();
-        resetWrite();
-        setRejectPropertyId(null);
-        setRejectReason("");
-        fetchHistory(); // Refresh history
-      }, 1000);
+    if (isConfirmed && hash) {
+      // Add the processed property to the Set for optimistic UI removal
+      if (processingPropertyId) {
+        setProcessedPropertyIds(prev => new Set(prev).add(processingPropertyId.toString()));
+
+        // Create optimistic history entry
+        const optimisticEntry = {
+          type: pendingAction === 'approve' ? 'Approved Sale' : 'Rejected Sale',
+          args: { propertyId: processingPropertyId },
+          transactionHash: hash,
+          blockNumber: BigInt(Date.now()), // Temporary high number for sorting
+          isOptimistic: true // Flag to identify optimistic entries
+        };
+        setHistoryLogs(prev => [optimisticEntry, ...prev]);
+      }
+      // Also refetch to ensure data is eventually consistent
+      refetch();
+      // Delayed history refetch to get actual blockchain data with proper block numbers
+      setTimeout(() => fetchHistory(), 3000);
+      resetWrite();
+      setRejectPropertyId(null);
+      setRejectReason("");
+      setProcessingPropertyId(null);
+      setPendingAction(null);
     }
-  }, [isConfirmed, refetch, resetWrite]);
+  }, [isConfirmed, refetch, resetWrite, processingPropertyId, hash, pendingAction]);
 
   const isAuthorized = address && authorizedEmployee && address.toLowerCase() === authorizedEmployee.toLowerCase();
 
-  // Filter Pending Properties
-  // Verified (2) -> Needs Revenue Logic? Or just SalePending (6)?
-  // User reported "put a land for selling request", which is State 6.
-  // We must show State 6.
-  // Filter Pending Properties
+  // Filter Pending Properties - also exclude optimistically processed ones
   // State 0: Registered (Inspector needs to verify) -> Revenue can VIEW/CHAT
   // State 1: Inspector Accepted? (Still pending verification) -> Revenue can VIEW/CHAT
   // State 6: Sale Pending -> Revenue needs to APPROVE
   const pendingProperties = useMemo(() =>
     (properties as any[])?.filter((p: any) => {
       const state = Number(p.state);
-      return state === 0 || state === 1 || state === 6;
+      const isPending = state === 0 || state === 1 || state === 6;
+      const notProcessed = !processedPropertyIds.has(p.propertyId.toString());
+      return isPending && notProcessed;
     }) || [],
-    [properties]);
+    [properties, processedPropertyIds]);
 
   // Resolve Metadata and Fetch Inspectors
   useEffect(() => {
@@ -187,6 +207,8 @@ export default function RevenueDashboard() {
   // Actions
   const handleVerify = async (propertyId: bigint) => {
     if (!address || !isAuthorized) return;
+    setProcessingPropertyId(propertyId); // Track for optimistic removal
+    setPendingAction('approve'); // Track action type for optimistic history
     writeContract({
       address: LAND_REGISTRY_ADDRESS,
       abi: LAND_REGISTRY_ABI,
@@ -198,6 +220,8 @@ export default function RevenueDashboard() {
   // Add handleApprove for Sale Requests
   const handleApprove = async (propertyId: bigint) => {
     if (!address || !isAuthorized) return;
+    setProcessingPropertyId(propertyId); // Track for optimistic removal
+    setPendingAction('approve'); // Track action type for optimistic history
     writeContract({
       address: LAND_REGISTRY_ADDRESS,
       abi: LAND_REGISTRY_ABI,
@@ -208,16 +232,13 @@ export default function RevenueDashboard() {
 
   const handleReject = async (propertyId: bigint) => {
     if (!address || !isAuthorized || !rejectReason.trim()) return;
-    // Determine which reject function to call based on state?
-    // Usually generic 'rejectSaleRequest' is for sales. 'rejectProperty' for verification?
-    // Let's check the property state in the list render or just try one.
-    // Ideally pass a type/mode. For now, assuming SaleRequest since that's the main bug.
-    // Wait, we need to know WHICH reject to call.
 
-    // FIX: Check selected property state. Since `rejectPropertyId` is set, we need to find that property in the list?
-    // Or just try `rejectSaleRequest` if it's state 6.
+    // Find the property to determine which reject function to call
     const property = pendingProperties.find((p: any) => p.propertyId === rejectPropertyId);
     if (!property) return;
+
+    setProcessingPropertyId(propertyId); // Track for optimistic removal
+    setPendingAction('reject'); // Track action type for optimistic history
 
     if (property.state === 6) {
       writeContract({

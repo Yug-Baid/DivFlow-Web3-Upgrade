@@ -30,6 +30,8 @@ export default function Dashboard() {
   const [isMounted, setIsMounted] = useState(false);
   const [resolvedMetadata, setResolvedMetadata] = useState<Record<string, PropertyMetadata | string>>({});
   const [userName, setUserName] = useState<string>("User");
+  // Track properties that have been listed for sale for optimistic UI updates
+  const [listedPropertyIds, setListedPropertyIds] = useState<Set<string>>(new Set());
   const publicClient = usePublicClient();
 
   useEffect(() => {
@@ -465,8 +467,8 @@ export default function Dashboard() {
                           </Button>
                         </Link>
                         {/* G1 FIX: Only show Sell button for Verified(2) or Bought(5) states */}
-                        {/* Hide for OnSale(4) or SalePending(6) states */}
-                        {(property.state === 2 || property.state === 5) && (
+                        {/* Hide for OnSale(4) or SalePending(6) states, and optimistically hide after listing */}
+                        {(property.state === 2 || property.state === 5) && !listedPropertyIds.has(property.propertyId.toString()) && (
                           <Button
                             variant="hero"
                             size="sm"
@@ -514,7 +516,11 @@ export default function Dashboard() {
               }}
               propertyId={selectedPropertyId}
               onSuccess={() => {
-                // G1 FIX: Refetch properties immediately after successful listing
+                // Optimistic UI: Add to listed set immediately to hide Sell button
+                if (selectedPropertyId) {
+                  setListedPropertyIds(prev => new Set(prev).add(selectedPropertyId.toString()));
+                }
+                // Also refetch to ensure data is eventually consistent
                 result.refetch();
               }}
             />
