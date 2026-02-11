@@ -1,4 +1,4 @@
-# 🏠 LandChain - Decentralized Land Registry
+# 🏠 DivFlow - Decentralized Land Registry
 
 A blockchain-based land registry system built for transparency, security, and efficiency. This project enables secure property registration, verification, and marketplace transactions using smart contracts on Ethereum.
 
