@@ -30,6 +30,11 @@ A blockchain-based land registry system built for transparency, security, and ef
 - **Staff Contacts**: Both Land Inspector and Revenue Employee visible to owners
 - **On-Chain History**: All transactions permanently recorded on blockchain
 
+### AI-Assisted Deed Reading
+- **Scanned Document OCR**: Reads deed PDFs and images with a local Hugging Face model
+- **Structured Extraction**: A local Ollama model extracts people, parcels, survey references, dates, and compensation details
+- **Registration Assistance**: Users review extracted facts before applying them to blockchain registration
+
 ---
 
 ## 🛠️ Tech Stack
@@ -37,6 +42,7 @@ A blockchain-based land registry system built for transparency, security, and ef
 | Layer | Technology |
 |-------|------------|
 | **Frontend** | Next.js 14, TypeScript, TailwindCSS, wagmi, viem |
+| **OCR Backend** | FastAPI, Hugging Face Florence-2, local Ollama |
 | **Smart Contracts** | Solidity 0.8.20, Foundry |
 | **Local Blockchain** | Anvil (Chain ID: 31337) |
 | **Styling** | Tailwind CSS + Custom Design System |
@@ -49,10 +55,11 @@ A blockchain-based land registry system built for transparency, security, and ef
 - [Node.js 18+](https://nodejs.org/)
 - [Foundry](https://getfoundry.sh/) (for smart contracts)
 - [Git](https://git-scm.com/)
+- Python 3.10+ and [Ollama](https://ollama.com/) (for deed OCR)
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/Yug-Baid/DivFlow-Web3-Upgrade.git
+git clone https://github.com/ZenithGupta/DivFlow-Web3-Upgrade.git
 cd DivFlow-Web3-Upgrade
 ```
 
@@ -71,14 +78,28 @@ bash setup_and_deploy.sh
 ```
 This compiles, deploys, and updates frontend config automatically.
 
-### 4. Run Frontend
+### 4. Start the OCR Service
+```bash
+cd backend
+python -m venv .venv
+# Windows: .venv\Scripts\Activate.ps1
+# macOS/Linux: source .venv/bin/activate
+pip install -e ".[test]"
+ollama pull qwen2.5:7b-instruct
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+### 5. Run Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### 5. Open Application
+Copy `frontend/.env.example` to `frontend/.env.local`. Its default
+`OCR_API_URL` points the Next.js server route at the local OCR service.
+
+### 6. Open Application
 Visit [http://localhost:3000](http://localhost:3000) and connect your wallet (MetaMask).
 
 ---

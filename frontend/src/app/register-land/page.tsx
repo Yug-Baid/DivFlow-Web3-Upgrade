@@ -10,8 +10,9 @@ import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, Building, Ruler, Hash, ArrowLeft, Upload, AlertTriangle, FileText, Loader2, Cloud, ShieldX, Image as ImageIcon, Plus } from "lucide-react";
-import { uploadToIPFS, uploadMetadata, isPinataConfigured, PropertyMetadata } from "@/lib/ipfs";
+import { MapPin, Building, Ruler, Hash, ArrowLeft, Upload, AlertTriangle, FileText, Loader2, ShieldX, Image as ImageIcon, Plus, ScanText, CheckCircle2 } from "lucide-react";
+import { uploadToIPFS, uploadMetadata, PropertyMetadata } from "@/lib/ipfs";
+import { areaToSquareFeet, extractLandDocument, OcrExtraction } from "@/lib/ocr";
 import dynamic from 'next/dynamic';
 import { StaffRouteGuard } from "@/components/StaffRouteGuard";
 
@@ -123,6 +124,7 @@ export default function RegisterLand() {
         extraPhotos: []
       });
       setGeneratedHash("");
+      setOcrResult(null);
 
       // Redirect to dashboard after showing success message
       const timer = setTimeout(() => {
@@ -158,6 +160,8 @@ export default function RegisterLand() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [isEnhancingDescription, setIsEnhancingDescription] = useState(false);
+  const [isExtractingDeed, setIsExtractingDeed] = useState(false);
+  const [ocrResult, setOcrResult] = useState<OcrExtraction | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -261,6 +265,7 @@ export default function RegisterLand() {
       setFiles(prev => ({ ...prev, coverPhoto: selectedFiles[0] }));
     } else if (type === 'deed') {
       setFiles(prev => ({ ...prev, deedDocument: selectedFiles[0] }));
+      setOcrResult(null);
     } else if (type === 'extra') {
       const newPhotos = [...files.extraPhotos, ...Array.from(selectedFiles)];
       if (newPhotos.length > 5) {
@@ -279,6 +284,30 @@ export default function RegisterLand() {
       }
     }
     setUploadError(null);
+  };
+
+  const handleExtractDeed = async () => {
+    if (!files.deedDocument) return;
+    setIsExtractingDeed(true);
+    setUploadError(null);
+    try {
+      const result = await extractLandDocument(files.deedDocument);
+      const parcel = result.record.parcels[0];
+      const extractedAddress = [parcel?.village, parcel?.district, parcel?.state].filter(Boolean).join(", ");
+      const extractedArea = areaToSquareFeet(parcel?.area || null);
+      setOcrResult(result);
+      setFormData(prev => ({
+        ...prev,
+        propertyName: prev.propertyName || (parcel?.village ? `Land at ${parcel.village}` : ""),
+        description: prev.description || result.record.summary,
+        addressLine: prev.addressLine || extractedAddress,
+        area: prev.area || extractedArea || "",
+      }));
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Could not read the deed");
+    } finally {
+      setIsExtractingDeed(false);
+    }
   };
 
   const removeExtraPhoto = (index: number) => {
@@ -667,8 +696,49 @@ export default function RegisterLand() {
                       )}
                     </div>
                   </label>
+                  {files.deedDocument && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={handleExtractDeed}
+                      disabled={isExtractingDeed}
+                    >
+                      {isExtractingDeed ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Reading deed with AI...</>
+                      ) : (
+                        <><ScanText className="w-4 h-4" /> Read deed and fill form</>
+                      )}
+                    </Button>
+                  )}
                 </div>
               </div>
+
+              {ocrResult && (
+                <div className={`rounded-lg border p-4 text-sm ${ocrResult.record.review_required ? "border-yellow-500/40 bg-yellow-500/10" : "border-green-500/40 bg-green-500/10"}`}>
+                  <div className="flex items-center gap-2 font-semibold">
+                    {ocrResult.record.review_required
+                      ? <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                      : <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                    Deed analysis complete — {Math.round(ocrResult.record.confidence * 100)}% confidence
+                  </div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2 text-muted-foreground">
+                    <p><span className="text-foreground font-medium">People:</span> {ocrResult.record.people.map(person => `${person.name}${person.role ? ` (${person.role})` : ""}`).join(", ") || "None detected"}</p>
+                    <p><span className="text-foreground font-medium">Survey:</span> {ocrResult.record.parcels[0]?.survey_number || "Not detected"}</p>
+                    <p><span className="text-foreground font-medium">Document:</span> {ocrResult.record.document_type}</p>
+                    <p><span className="text-foreground font-medium">Pages:</span> {ocrResult.page_count}</p>
+                  </div>
+                  {ocrResult.record.warnings.length > 0 && (
+                    <p className="mt-3 text-xs text-yellow-600 dark:text-yellow-400">
+                      Review required: {ocrResult.record.warnings.join(" ")}
+                    </p>
+                  )}
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    AI-filled values are suggestions. Compare them with the deed before registering on-chain.
+                  </p>
+                </div>
+              )}
 
               {/* Extra Photos */}
               <div className="space-y-2">
